@@ -26,18 +26,22 @@ func NewProjectsListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Proj
 }
 
 type ProjectInfo struct {
-	Name       string        `json:"name"`
-	Containers int           `json:"containers"`
-	Running    int           `json:"running"`
-	Stopped    int           `json:"stopped"`
-	Services   []ServiceInfo `json:"services"`
+	Name        string        `json:"name"`
+	Containers  int           `json:"containers"`
+	Running     int           `json:"running"`
+	Stopped     int           `json:"stopped"`
+	HaveUpdate  bool          `json:"haveUpdate"`
+	UpdateCount int           `json:"updateCount"`
+	Services    []ServiceInfo `json:"services"`
 }
 
 type ServiceInfo struct {
-	Name        string `json:"name"`
-	ContainerId string `json:"containerId"`
-	Status      string `json:"status"`
-	Image       string `json:"image"`
+	Name          string `json:"name"`
+	ContainerId   string `json:"containerId"`
+	ContainerName string `json:"containerName"`
+	Status        string `json:"status"`
+	Image         string `json:"image"`
+	HaveUpdate    bool   `json:"haveUpdate"`
 }
 
 func (l *ProjectsListLogic) ProjectsList() (resp *types.Resp, err error) {
@@ -94,12 +98,27 @@ func (l *ProjectsListLogic) ProjectsList() (resp *types.Resp, err error) {
 			}
 		}
 
+		// 检查是否有更新（通过 ImageID 查找）
+		haveUpdate := false
+		if l.svcCtx.HubImageInfo != nil && l.svcCtx.HubImageInfo.Data != nil {
+			if info, ok := l.svcCtx.HubImageInfo.Data[c.ImageID]; ok {
+				haveUpdate = info.NeedUpdate
+			}
+		}
+
+		if haveUpdate {
+			project.HaveUpdate = true
+			project.UpdateCount++
+		}
+
 		// 添加服务信息
 		project.Services = append(project.Services, ServiceInfo{
-			Name:        serviceName,
-			ContainerId: c.ID[:12],
-			Status:      c.State,
-			Image:       c.Image,
+			Name:          serviceName,
+			ContainerId:   c.ID[:12],
+			ContainerName: containerName,
+			Status:        c.State,
+			Image:         c.Image,
+			HaveUpdate:    haveUpdate,
 		})
 	}
 

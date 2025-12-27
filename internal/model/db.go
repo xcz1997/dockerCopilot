@@ -63,6 +63,7 @@ func migrate(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS container_groups (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT UNIQUE NOT NULL,
+			group_type TEXT NOT NULL DEFAULT 'container',
 			cron_expr TEXT NOT NULL DEFAULT '',
 			auto_update INTEGER NOT NULL DEFAULT 0,
 			check_update INTEGER NOT NULL DEFAULT 1,
@@ -75,6 +76,9 @@ func migrate(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
+
+	// 添加 group_type 列（如果不存在，忽略错误）
+	_, _ = db.Exec(`ALTER TABLE container_groups ADD COLUMN group_type TEXT NOT NULL DEFAULT 'container'`)
 
 	// 规则表
 	_, err = db.Exec(`

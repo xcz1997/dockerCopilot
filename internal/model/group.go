@@ -5,10 +5,18 @@ import (
 	"time"
 )
 
+// GroupType 群组类型常量
+const (
+	GroupTypeContainer = "container" // 容器维度
+	GroupTypeProject   = "project"   // Compose 项目维度
+	GroupTypeImage     = "image"     // 镜像维度
+)
+
 // ContainerGroup 容器群组模型
 type ContainerGroup struct {
 	ID          int64     `json:"id"`
 	Name        string    `json:"name"`
+	GroupType   string    `json:"groupType"` // container, project, image
 	CronExpr    string    `json:"cronExpr"`
 	AutoUpdate  bool      `json:"autoUpdate"`
 	CheckUpdate bool      `json:"checkUpdate"`
@@ -27,10 +35,14 @@ type GroupWithDetails struct {
 
 // CreateGroup 创建群组
 func CreateGroup(group *ContainerGroup) (int64, error) {
+	// 默认类型为 container
+	if group.GroupType == "" {
+		group.GroupType = GroupTypeContainer
+	}
 	result, err := db.Exec(`
-		INSERT INTO container_groups (name, cron_expr, auto_update, check_update, priority, enabled)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, group.Name, group.CronExpr, boolToInt(group.AutoUpdate), boolToInt(group.CheckUpdate), group.Priority, boolToInt(group.Enabled))
+		INSERT INTO container_groups (name, group_type, cron_expr, auto_update, check_update, priority, enabled)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, group.Name, group.GroupType, group.CronExpr, boolToInt(group.AutoUpdate), boolToInt(group.CheckUpdate), group.Priority, boolToInt(group.Enabled))
 	if err != nil {
 		return 0, err
 	}
@@ -41,9 +53,9 @@ func CreateGroup(group *ContainerGroup) (int64, error) {
 func UpdateGroup(group *ContainerGroup) error {
 	_, err := db.Exec(`
 		UPDATE container_groups
-		SET name = ?, cron_expr = ?, auto_update = ?, check_update = ?, priority = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP
+		SET name = ?, group_type = ?, cron_expr = ?, auto_update = ?, check_update = ?, priority = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, group.Name, group.CronExpr, boolToInt(group.AutoUpdate), boolToInt(group.CheckUpdate), group.Priority, boolToInt(group.Enabled), group.ID)
+	`, group.Name, group.GroupType, group.CronExpr, boolToInt(group.AutoUpdate), boolToInt(group.CheckUpdate), group.Priority, boolToInt(group.Enabled), group.ID)
 	return err
 }
 
@@ -56,7 +68,7 @@ func DeleteGroup(id int64) error {
 // GetGroupByID 根据ID获取群组
 func GetGroupByID(id int64) (*ContainerGroup, error) {
 	row := db.QueryRow(`
-		SELECT id, name, cron_expr, auto_update, check_update, priority, enabled, created_at, updated_at
+		SELECT id, name, group_type, cron_expr, auto_update, check_update, priority, enabled, created_at, updated_at
 		FROM container_groups WHERE id = ?
 	`, id)
 
@@ -66,7 +78,7 @@ func GetGroupByID(id int64) (*ContainerGroup, error) {
 // GetGroupByName 根据名称获取群组
 func GetGroupByName(name string) (*ContainerGroup, error) {
 	row := db.QueryRow(`
-		SELECT id, name, cron_expr, auto_update, check_update, priority, enabled, created_at, updated_at
+		SELECT id, name, group_type, cron_expr, auto_update, check_update, priority, enabled, created_at, updated_at
 		FROM container_groups WHERE name = ?
 	`, name)
 
@@ -76,7 +88,7 @@ func GetGroupByName(name string) (*ContainerGroup, error) {
 // GetAllGroups 获取所有群组
 func GetAllGroups() ([]ContainerGroup, error) {
 	rows, err := db.Query(`
-		SELECT id, name, cron_expr, auto_update, check_update, priority, enabled, created_at, updated_at
+		SELECT id, name, group_type, cron_expr, auto_update, check_update, priority, enabled, created_at, updated_at
 		FROM container_groups ORDER BY priority ASC, id ASC
 	`)
 	if err != nil {
@@ -99,7 +111,7 @@ func GetAllGroups() ([]ContainerGroup, error) {
 // GetEnabledGroups 获取所有启用的群组
 func GetEnabledGroups() ([]ContainerGroup, error) {
 	rows, err := db.Query(`
-		SELECT id, name, cron_expr, auto_update, check_update, priority, enabled, created_at, updated_at
+		SELECT id, name, group_type, cron_expr, auto_update, check_update, priority, enabled, created_at, updated_at
 		FROM container_groups WHERE enabled = 1 ORDER BY priority ASC, id ASC
 	`)
 	if err != nil {
@@ -147,13 +159,18 @@ func GetGroupWithDetails(id int64) (*GroupWithDetails, error) {
 func scanGroup(row *sql.Row) (*ContainerGroup, error) {
 	var group ContainerGroup
 	var autoUpdate, checkUpdate, enabled int
+	var groupType sql.NullString
 	err := row.Scan(
-		&group.ID, &group.Name, &group.CronExpr,
+		&group.ID, &group.Name, &groupType, &group.CronExpr,
 		&autoUpdate, &checkUpdate, &group.Priority, &enabled,
 		&group.CreatedAt, &group.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+	group.GroupType = groupType.String
+	if group.GroupType == "" {
+		group.GroupType = GroupTypeContainer
 	}
 	group.AutoUpdate = autoUpdate == 1
 	group.CheckUpdate = checkUpdate == 1
@@ -165,13 +182,18 @@ func scanGroup(row *sql.Row) (*ContainerGroup, error) {
 func scanGroupFromRows(rows *sql.Rows) (*ContainerGroup, error) {
 	var group ContainerGroup
 	var autoUpdate, checkUpdate, enabled int
+	var groupType sql.NullString
 	err := rows.Scan(
-		&group.ID, &group.Name, &group.CronExpr,
+		&group.ID, &group.Name, &groupType, &group.CronExpr,
 		&autoUpdate, &checkUpdate, &group.Priority, &enabled,
 		&group.CreatedAt, &group.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+	group.GroupType = groupType.String
+	if group.GroupType == "" {
+		group.GroupType = GroupTypeContainer
 	}
 	group.AutoUpdate = autoUpdate == 1
 	group.CheckUpdate = checkUpdate == 1

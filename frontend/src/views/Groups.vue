@@ -15,9 +15,17 @@ const selectedGroup = ref(null)
 const editingGroup = ref(null)
 const operatingIds = ref(new Set())
 
+// 群组类型选项
+const groupTypes = [
+  { value: 'container', label: '容器', icon: 'container', color: 'blue' },
+  { value: 'project', label: 'Compose 项目', icon: 'project', color: 'purple' },
+  { value: 'image', label: '镜像', icon: 'image', color: 'green' }
+]
+
 // 新建群组表单
 const newGroup = ref({
   name: '',
+  groupType: 'container',
   cronExpr: '',
   autoUpdate: false,
   checkUpdate: true,
@@ -72,6 +80,7 @@ onMounted(async () => {
 function openCreateModal() {
   newGroup.value = {
     name: '',
+    groupType: 'container',
     cronExpr: '',
     autoUpdate: false,
     checkUpdate: true,
@@ -79,6 +88,20 @@ function openCreateModal() {
     enabled: true
   }
   showCreateModal.value = true
+}
+
+function getGroupTypeLabel(type) {
+  const found = groupTypes.find(t => t.value === type)
+  return found?.label || type
+}
+
+function getGroupTypeColor(type) {
+  const colors = {
+    container: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    project: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+    image: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+  }
+  return colors[type] || colors.container
 }
 
 async function createGroup() {
@@ -327,7 +350,12 @@ const availableContainers = computed(() => {
       <div v-for="group in groupsStore.groups" :key="group.id" class="card p-5">
         <div class="flex items-start justify-between mb-4">
           <div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ group.name }}</h3>
+            <div class="flex items-center gap-2 mb-1">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ group.name }}</h3>
+              <span :class="['px-2 py-0.5 text-xs font-medium rounded', getGroupTypeColor(group.groupType || 'container')]">
+                {{ getGroupTypeLabel(group.groupType || 'container') }}
+              </span>
+            </div>
             <p class="text-sm text-gray-500 dark:text-gray-400">
               优先级: {{ group.priority }} ·
               <span v-if="group.cronExpr">定时: {{ group.cronExpr }}</span>
@@ -401,6 +429,24 @@ const availableContainers = computed(() => {
             <input v-model="newGroup.name" type="text" class="input" placeholder="输入群组名称">
           </div>
           <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">群组类型</label>
+            <div class="flex gap-2">
+              <button
+                v-for="type in groupTypes"
+                :key="type.value"
+                @click="newGroup.groupType = type.value"
+                :class="[
+                  'flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all border-2',
+                  newGroup.groupType === type.value
+                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                    : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                ]"
+              >
+                {{ type.label }}
+              </button>
+            </div>
+          </div>
+          <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">定时任务 (Cron)</label>
             <select v-model="newGroup.cronExpr" class="input">
               <option v-for="preset in cronPresets" :key="preset.value" :value="preset.value">
@@ -443,6 +489,24 @@ const availableContainers = computed(() => {
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">群组名称</label>
             <input v-model="editingGroup.name" type="text" class="input">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">群组类型</label>
+            <div class="flex gap-2">
+              <button
+                v-for="type in groupTypes"
+                :key="type.value"
+                @click="editingGroup.groupType = type.value"
+                :class="[
+                  'flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all border-2',
+                  editingGroup.groupType === type.value
+                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                    : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                ]"
+              >
+                {{ type.label }}
+              </button>
+            </div>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">定时任务 (Cron)</label>
