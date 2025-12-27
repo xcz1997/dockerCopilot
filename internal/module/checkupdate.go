@@ -32,7 +32,13 @@ func NewImageCheck() *ImageUpdateData {
 }
 func (i *ImageUpdateData) CheckUpdate(imageList []types.Image) {
 	for _, image := range imageList {
+		// 跳过自身镜像
 		if strings.Contains(image.ImageName, "0nlylty/dockercopilot") {
+			continue
+		}
+		// 跳过无效镜像（无 RepoTags 和 RepoDigests 的孤立镜像）
+		if image.ImageName == "None" || image.ImageTag == "None" {
+			logx.Debugf("跳过无效镜像: %s (ID: %s)", image.ImageName, image.ID)
 			continue
 		}
 		i.checkSingleImage(image)

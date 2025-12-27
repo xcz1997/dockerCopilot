@@ -165,7 +165,7 @@ async function pollProgress(taskId) {
   while (retries < maxRetries) {
     try {
       const response = await api.progress.get(taskId)
-      if (response.code === 0) {
+      if (response.code === 200) {
         updateProgress.value = response.data
         if (response.data?.status === 'completed' || response.data?.status === 'failed') {
           break

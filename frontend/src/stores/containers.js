@@ -12,7 +12,7 @@ export const useContainersStore = defineStore('containers', () => {
     error.value = null
     try {
       const response = await api.containers.list()
-      if (response.code === 0) {
+      if (response.code === 200) {
         containers.value = response.data || []
       } else {
         error.value = response.msg
@@ -27,7 +27,7 @@ export const useContainersStore = defineStore('containers', () => {
   async function startContainer(id) {
     try {
       const response = await api.containers.start(id)
-      if (response.code === 0) {
+      if (response.code === 200) {
         await fetchContainers()
         return { success: true }
       }
@@ -40,7 +40,7 @@ export const useContainersStore = defineStore('containers', () => {
   async function stopContainer(id) {
     try {
       const response = await api.containers.stop(id)
-      if (response.code === 0) {
+      if (response.code === 200) {
         await fetchContainers()
         return { success: true }
       }
@@ -53,7 +53,7 @@ export const useContainersStore = defineStore('containers', () => {
   async function restartContainer(id) {
     try {
       const response = await api.containers.restart(id)
-      if (response.code === 0) {
+      if (response.code === 200) {
         await fetchContainers()
         return { success: true }
       }
@@ -66,7 +66,7 @@ export const useContainersStore = defineStore('containers', () => {
   async function renameContainer(id, newName) {
     try {
       const response = await api.containers.rename(id, newName)
-      if (response.code === 0) {
+      if (response.code === 200) {
         await fetchContainers()
         return { success: true }
       }
@@ -79,7 +79,7 @@ export const useContainersStore = defineStore('containers', () => {
   async function updateContainer(id, imageNameAndTag, containerName) {
     try {
       const response = await api.containers.update(id, imageNameAndTag, containerName)
-      return { success: response.code === 0, data: response.data, message: response.msg }
+      return { success: response.code === 200, data: response.data, message: response.msg }
     } catch (e) {
       return { success: false, message: e.message }
     }

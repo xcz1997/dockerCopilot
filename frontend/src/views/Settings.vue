@@ -10,7 +10,7 @@ async function fetchVersion() {
   loading.value = true
   try {
     const response = await api.version.get()
-    if (response.code === 0) {
+    if (response.code === 200) {
       version.value = response.data
     }
   } catch (e) {
@@ -26,7 +26,7 @@ async function handleUpdate() {
   updating.value = true
   try {
     const response = await api.version.update()
-    if (response.code === 0) {
+    if (response.code === 200) {
       alert('更新成功，程序正在重启...')
       // 等待几秒后刷新页面
       setTimeout(() => {

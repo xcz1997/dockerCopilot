@@ -12,7 +12,7 @@ export const useImagesStore = defineStore('images', () => {
     error.value = null
     try {
       const response = await api.images.list()
-      if (response.code === 0) {
+      if (response.code === 200) {
         images.value = response.data || []
       } else {
         error.value = response.msg
@@ -27,7 +27,7 @@ export const useImagesStore = defineStore('images', () => {
   async function removeImage(id, force = false) {
     try {
       const response = await api.images.remove(id, force)
-      if (response.code === 0) {
+      if (response.code === 200) {
         await fetchImages()
         return { success: true }
       }

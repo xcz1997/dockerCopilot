@@ -12,7 +12,7 @@ export const useBackupsStore = defineStore('backups', () => {
     error.value = null
     try {
       const response = await api.backups.list()
-      if (response.code === 0) {
+      if (response.code === 200) {
         backups.value = response.data || []
       } else {
         error.value = response.msg
@@ -27,7 +27,7 @@ export const useBackupsStore = defineStore('backups', () => {
   async function createBackup() {
     try {
       const response = await api.backups.create()
-      if (response.code === 0) {
+      if (response.code === 200) {
         await fetchBackups()
         return { success: true, data: response.data }
       }
@@ -40,7 +40,7 @@ export const useBackupsStore = defineStore('backups', () => {
   async function restoreBackup(filename) {
     try {
       const response = await api.backups.restore(filename)
-      return { success: response.code === 0, data: response.data, message: response.msg }
+      return { success: response.code === 200, data: response.data, message: response.msg }
     } catch (e) {
       return { success: false, message: e.message }
     }
@@ -49,7 +49,7 @@ export const useBackupsStore = defineStore('backups', () => {
   async function deleteBackup(filename) {
     try {
       const response = await api.backups.delete(filename)
-      if (response.code === 0) {
+      if (response.code === 200) {
         await fetchBackups()
         return { success: true }
       }
@@ -62,7 +62,7 @@ export const useBackupsStore = defineStore('backups', () => {
   async function exportCompose() {
     try {
       const response = await api.backups.exportCompose()
-      return { success: response.code === 0, data: response.data, message: response.msg }
+      return { success: response.code === 200, data: response.data, message: response.msg }
     } catch (e) {
       return { success: false, message: e.message }
     }
