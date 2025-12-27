@@ -23,8 +23,10 @@ type GroupScheduler struct {
 
 // NewGroupScheduler 创建群组调度器
 func NewGroupScheduler(dockerClient *client.Client, hubImageInfo *module.ImageUpdateData) *GroupScheduler {
+	// 使用标准的 5 字段 cron 格式 (分 时 日 月 周)，与前端预设一致
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 	return &GroupScheduler{
-		cron:         cron.New(cron.WithSeconds()),
+		cron:         cron.New(cron.WithParser(parser)),
 		dockerClient: dockerClient,
 		hubImageInfo: hubImageInfo,
 		jobs:         make(map[int64]cron.EntryID),

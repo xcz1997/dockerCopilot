@@ -4,11 +4,15 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/robfig/cron/v3"
 	"github.com/xcz1997/dockerCopilot/internal/model"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 	"github.com/xcz1997/dockerCopilot/internal/types"
 	"github.com/zeromicro/go-zero/core/logx"
 )
+
+// cronParserUpdate 标准 5 字段 cron 解析器
+var cronParserUpdate = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 
 type GroupUpdateLogic struct {
 	logx.Logger
@@ -40,6 +44,16 @@ func (l *GroupUpdateLogic) GroupUpdate(req *types.GroupUpdateReq) (resp *types.R
 		resp.Msg = "获取群组失败: " + err.Error()
 		resp.Data = map[string]interface{}{}
 		return resp, err
+	}
+
+	// 验证 cron 表达式格式
+	if req.CronExpr != "" {
+		if _, err := cronParserUpdate.Parse(req.CronExpr); err != nil {
+			resp.Code = 400
+			resp.Msg = "Cron 表达式格式错误: " + err.Error() + "。请使用标准 5 字段格式 (分 时 日 月 周)"
+			resp.Data = map[string]interface{}{}
+			return resp, nil
+		}
 	}
 
 	// 更新字段
