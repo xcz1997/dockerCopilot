@@ -33,15 +33,24 @@ func (l *GetProgressLogic) GetProgress(req *types.GetProgressReq) (resp *types.R
 		resp.Data = map[string]interface{}{}
 		return
 	}
+	// 计算状态：前端期望 status 为 'completed'/'failed'/其他
+	status := "in_progress"
+	if progress.IsDone {
+		if progress.Percentage >= 100 {
+			status = "completed"
+		} else {
+			status = "failed"
+		}
+	}
+
 	resp.Code = 200
 	resp.Msg = progress.Message
 	resp.Data = map[string]interface{}{
-		"taskID":     progress.TaskID,
-		"percentage": progress.Percentage,
-		"message":    progress.Message,
-		"name":       progress.Name,
-		"detailMsg":  progress.DetailMsg,
-		"isDone":     progress.IsDone,
+		"taskId":   progress.TaskID,
+		"progress": progress.Percentage,
+		"message":  progress.Message,
+		"status":   status,
+		"name":     progress.Name,
 	}
 	return resp, nil
 }

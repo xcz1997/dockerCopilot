@@ -43,6 +43,6 @@ func (l *UpdateLogic) Update(req *types.ContainerUpdateReq) (resp *types.Resp, e
 	}()
 	resp.Code = 200
 	resp.Msg = "success"
-	resp.Data = map[string]string{"taskID": taskID}
+	resp.Data = map[string]string{"taskId": taskID}
 	return resp, nil
 }
