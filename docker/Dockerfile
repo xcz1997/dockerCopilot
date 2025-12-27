@@ -19,7 +19,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend-builder /build/front ./front
-RUN go build -ldflags "-s -w" -o dockerCopilot .
+# 读取版本号并注入到二进制
+RUN VERSION=$(cat version 2>/dev/null || echo "dev") && \
+    BUILD_DATE=$(date -u '+%Y-%m-%d_%H:%M:%S') && \
+    go build -ldflags "-s -w -X 'github.com/xcz1997/dockerCopilot/internal/config.Version=${VERSION}' -X 'github.com/xcz1997/dockerCopilot/internal/config.BuildDate=${BUILD_DATE}'" -o dockerCopilot .
 
 # Stage 3: 运行时镜像
 FROM --platform=linux/amd64 alpine

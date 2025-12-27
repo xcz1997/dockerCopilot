@@ -17,8 +17,12 @@ PROJECT_NAME="dockerCopilot"
 GO_VERSION="1.23"
 NODE_VERSION="20"
 
-# 获取版本信息
-VERSION=${VERSION:-$(git describe --tags --always 2>/dev/null || echo "dev")}
+# 获取版本信息（优先从 version 文件读取）
+if [ -f "version" ]; then
+    VERSION=${VERSION:-$(cat version | tr -d '\n')}
+else
+    VERSION=${VERSION:-$(git describe --tags --always 2>/dev/null || echo "dev")}
+fi
 BUILD_DATE=$(date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
@@ -58,6 +62,7 @@ show_help() {
     echo "  -v, --version      版本号 (默认: git tag 或 dev)"
     echo "  --skip-frontend    跳过前端构建"
     echo "  --frontend-only    仅构建前端"
+    echo "  --bump [TYPE]      构建前递增版本号 (major|minor|patch，默认 patch)"
     echo "  -h, --help         显示帮助信息"
     echo ""
     echo "示例:"
@@ -72,6 +77,8 @@ show_help() {
 PLATFORMS="$DEFAULT_PLATFORMS"
 SKIP_FRONTEND=false
 FRONTEND_ONLY=false
+BUMP_VERSION=false
+BUMP_TYPE="patch"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -93,6 +100,15 @@ while [[ $# -gt 0 ]]; do
             ;;
         --frontend-only)
             FRONTEND_ONLY=true
+            shift
+            ;;
+        --bump)
+            BUMP_VERSION=true
+            # 检查下一个参数是否是 bump type
+            if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+                BUMP_TYPE="$2"
+                shift
+            fi
             shift
             ;;
         -h|--help)
@@ -208,6 +224,15 @@ main() {
     echo "  Docker Copilot 构建脚本"
     echo "======================================"
     echo ""
+
+    # 如果启用了版本递增，先执行
+    if [ "$BUMP_VERSION" = true ]; then
+        print_info "递增版本号 (${BUMP_TYPE})..."
+        ./bump-version.sh "$BUMP_TYPE"
+        # 重新读取版本号
+        VERSION=$(cat version | tr -d '\n')
+    fi
+
     print_info "版本: ${VERSION}"
     print_info "构建时间: ${BUILD_DATE}"
     print_info "Git Commit: ${GIT_COMMIT}"
