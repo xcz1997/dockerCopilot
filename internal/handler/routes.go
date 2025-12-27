@@ -11,6 +11,7 @@ import (
 	"github.com/xcz1997/dockerCopilot/internal/handler/group"
 	image "github.com/xcz1997/dockerCopilot/internal/handler/image"
 	progress "github.com/xcz1997/dockerCopilot/internal/handler/progress"
+	"github.com/xcz1997/dockerCopilot/internal/handler/settings"
 	version "github.com/xcz1997/dockerCopilot/internal/handler/version"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 
@@ -219,6 +220,29 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodGet,
 				Path:    "/group/history",
 				Handler: group.HistoryListHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	// 设置管理路由
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/settings/bark",
+				Handler: settings.BarkGetHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/settings/bark",
+				Handler: settings.BarkSaveHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/settings/bark/test",
+				Handler: settings.BarkTestHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

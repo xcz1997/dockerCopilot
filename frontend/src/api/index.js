@@ -96,6 +96,12 @@ const api = {
     list: () => instance.get('/containers/assignments'),
     assign: (data) => instance.post('/group/container', data, { headers: { 'Content-Type': 'application/json' } }),
     unassign: (id) => instance.delete(`/group/container/${id}`)
+  },
+
+  settings: {
+    getBark: () => instance.get('/settings/bark'),
+    saveBark: (data) => instance.post('/settings/bark', data, { headers: { 'Content-Type': 'application/json' } }),
+    testBark: (data) => instance.post('/settings/bark/test', data, { headers: { 'Content-Type': 'application/json' } })
   }
 }
 

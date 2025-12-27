@@ -152,6 +152,18 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 
+	// 系统设置表
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS settings (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

@@ -149,3 +149,16 @@ type HistoryListReq struct {
 	Size    int   `form:"size,default=20"`
 	GroupId int64 `form:"groupId,optional"`
 }
+
+// ======== 设置管理类型 ========
+
+type BarkConfigReq struct {
+	Enabled bool   `json:"enabled"`
+	Server  string `json:"server"`
+	Key     string `json:"key"`
+}
+
+type BarkTestReq struct {
+	Server string `json:"server"`
+	Key    string `json:"key"`
+}

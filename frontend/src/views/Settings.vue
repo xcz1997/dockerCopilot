@@ -6,6 +6,16 @@ const version = ref(null)
 const loading = ref(true)
 const updating = ref(false)
 
+// Bark 配置
+const barkConfig = ref({
+  enabled: false,
+  server: '',
+  key: ''
+})
+const barkLoading = ref(false)
+const barkSaving = ref(false)
+const barkTesting = ref(false)
+
 async function fetchVersion() {
   loading.value = true
   try {
@@ -17,6 +27,64 @@ async function fetchVersion() {
     console.error('获取版本失败:', e)
   } finally {
     loading.value = false
+  }
+}
+
+async function fetchBarkConfig() {
+  barkLoading.value = true
+  try {
+    const response = await api.settings.getBark()
+    if (response.code === 200) {
+      barkConfig.value = {
+        enabled: response.data.enabled || false,
+        server: response.data.server || '',
+        key: response.data.key || ''
+      }
+    }
+  } catch (e) {
+    console.error('获取 Bark 配置失败:', e)
+  } finally {
+    barkLoading.value = false
+  }
+}
+
+async function saveBarkConfig() {
+  barkSaving.value = true
+  try {
+    const response = await api.settings.saveBark(barkConfig.value)
+    if (response.code === 200) {
+      alert('保存成功')
+    } else {
+      alert(response.msg || '保存失败')
+    }
+  } catch (e) {
+    alert('保存失败: ' + e.message)
+  } finally {
+    barkSaving.value = false
+  }
+}
+
+async function testBark() {
+  if (!barkConfig.value.server || !barkConfig.value.key) {
+    alert('请先填写服务器地址和密钥')
+    return
+  }
+
+  barkTesting.value = true
+  try {
+    const response = await api.settings.testBark({
+      server: barkConfig.value.server,
+      key: barkConfig.value.key
+    })
+    if (response.code === 200) {
+      alert('测试推送已发送，请检查手机通知')
+    } else {
+      alert(response.msg || '测试失败')
+    }
+  } catch (e) {
+    alert('测试失败: ' + e.message)
+  } finally {
+    barkTesting.value = false
   }
 }
 
@@ -44,6 +112,7 @@ async function handleUpdate() {
 
 onMounted(() => {
   fetchVersion()
+  fetchBarkConfig()
 })
 </script>
 
@@ -75,6 +144,111 @@ onMounted(() => {
               <span class="text-sm text-gray-500 dark:text-gray-400">{{ version.build_date }}</span>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bark 推送配置 -->
+    <div class="card p-6">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          Bark 推送通知
+        </div>
+      </h3>
+      <p class="text-gray-500 dark:text-gray-400 mb-4">
+        配置 Bark 推送服务，在容器更新等事件发生时接收通知。
+      </p>
+
+      <div v-if="barkLoading" class="flex items-center gap-2 text-gray-500 py-4">
+        <svg class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+        加载配置...
+      </div>
+
+      <div v-else class="space-y-4">
+        <!-- 启用开关 -->
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="font-medium text-gray-900 dark:text-white">启用推送</label>
+            <p class="text-sm text-gray-500 dark:text-gray-400">开启后将在容器更新时发送通知</p>
+          </div>
+          <button
+            @click="barkConfig.enabled = !barkConfig.enabled"
+            :class="[
+              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+              barkConfig.enabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+            ]"
+          >
+            <span
+              :class="[
+                'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                barkConfig.enabled ? 'translate-x-6' : 'translate-x-1'
+              ]"
+            />
+          </button>
+        </div>
+
+        <!-- 服务器地址 -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            服务器地址
+          </label>
+          <input
+            v-model="barkConfig.server"
+            type="text"
+            class="input"
+            placeholder="https://api.day.app"
+          />
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Bark 服务器地址，默认为 https://api.day.app
+          </p>
+        </div>
+
+        <!-- 密钥 -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            推送密钥
+          </label>
+          <input
+            v-model="barkConfig.key"
+            type="text"
+            class="input"
+            placeholder="你的 Bark 密钥"
+          />
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            在 Bark App 中获取的推送密钥
+          </p>
+        </div>
+
+        <!-- 按钮组 -->
+        <div class="flex gap-3 pt-2">
+          <button
+            @click="saveBarkConfig"
+            :disabled="barkSaving"
+            class="btn btn-primary"
+          >
+            <svg v-if="barkSaving" class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            {{ barkSaving ? '保存中...' : '保存配置' }}
+          </button>
+          <button
+            @click="testBark"
+            :disabled="barkTesting"
+            class="btn btn-secondary"
+          >
+            <svg v-if="barkTesting" class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            {{ barkTesting ? '发送中...' : '发送测试' }}
+          </button>
         </div>
       </div>
     </div>
