@@ -35,6 +35,7 @@ RUN apk add --no-cache tzdata sqlite-libs \
 
 ENV secretKey="" \
     DOCKER_HOST="unix:///var/run/docker.sock" \
+    DATA_DIR="/data" \
     BACKUP_DIR="/data/backups" \
     TZ="Asia/Shanghai"
 

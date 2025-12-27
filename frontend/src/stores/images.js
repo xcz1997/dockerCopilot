@@ -37,11 +37,25 @@ export const useImagesStore = defineStore('images', () => {
     }
   }
 
+  async function pullImage(imageNameAndTag) {
+    try {
+      const response = await api.images.pull(imageNameAndTag)
+      if (response.code === 200) {
+        await fetchImages()
+        return { success: true }
+      }
+      return { success: false, message: response.msg }
+    } catch (e) {
+      return { success: false, message: e.message }
+    }
+  }
+
   return {
     images,
     loading,
     error,
     fetchImages,
-    removeImage
+    removeImage,
+    pullImage
   }
 })

@@ -28,6 +28,9 @@ type Info struct {
 	RunningTime string `json:"runningTime"`
 	HaveUpdate  bool   `json:"haveUpdate"`
 	IsSelf      bool   `json:"isSelf"`
+	// Compose 相关信息
+	ComposeProject string `json:"composeProject,omitempty"`
+	ComposeService string `json:"composeService,omitempty"`
 }
 
 func NewContainersListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ContainersListLogic {
@@ -81,6 +84,9 @@ func (l *ContainersListLogic) ContainersList() (resp *types.Resp, err error) {
 		containerInfo.HaveUpdate = v.Update
 		// 检测是否为自身容器
 		containerInfo.IsSelf = module.IsSelfImage(containerInfo.UsingImage)
+		// 提取 Compose 信息
+		containerInfo.ComposeProject = v.Labels["com.docker.compose.project"]
+		containerInfo.ComposeService = v.Labels["com.docker.compose.service"]
 		containerInfoList = append(containerInfoList, containerInfo)
 	}
 	resp.Data = containerInfoList

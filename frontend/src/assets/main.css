@@ -114,6 +114,10 @@
     @apply bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300;
   }
 
+  .badge-purple {
+    @apply bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400;
+  }
+
   /* 容器状态颜色 */
   .status-running {
     @apply text-emerald-500;

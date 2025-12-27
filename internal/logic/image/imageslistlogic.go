@@ -24,6 +24,7 @@ type Info struct {
 	Size       string `json:"size"`
 	InUsed     bool   `json:"inUsed"`
 	CreateTime string `json:"createTime"`
+	HaveUpdate bool   `json:"haveUpdate"`
 }
 
 func NewImagesListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ImagesListLogic {
@@ -59,6 +60,10 @@ func (l *ImagesListLogic) ImagesList() (resp *types.Resp, err error) {
 		imageInfo.InUsed = v.InUsed
 		t := time.Unix(v.Created, 0)
 		imageInfo.CreateTime = t.Format("2006-01-02 15:04:05")
+		// 检查镜像是否有更新
+		if hubInfo, ok := l.svcCtx.HubImageInfo.Data[v.ID]; ok {
+			imageInfo.HaveUpdate = hubInfo.NeedUpdate
+		}
 		imageInfoList = append(imageInfoList, imageInfo)
 	}
 	resp.Data = imageInfoList

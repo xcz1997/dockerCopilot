@@ -55,7 +55,8 @@ const api = {
 
   images: {
     list: () => instance.get('/images'),
-    remove: (id, force = false) => instance.delete(`/image/${id}`, { params: { force } })
+    remove: (id, force = false) => instance.delete(`/image/${id}`, { params: { force } }),
+    pull: (imageNameAndTag) => instance.post('/image/pull', { image_name_and_tag: imageNameAndTag }, { headers: { 'Content-Type': 'application/json' } })
   },
 
   backups: {

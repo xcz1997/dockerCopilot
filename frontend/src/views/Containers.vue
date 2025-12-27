@@ -7,12 +7,17 @@ const containersStore = useContainersStore()
 
 const searchQuery = ref('')
 const filterStatus = ref('all')
+const filterUpdate = ref(false)
 const showRenameModal = ref(false)
 const showUpdateModal = ref(false)
+const showGroupModal = ref(false)
 const selectedContainer = ref(null)
 const newContainerName = ref('')
 const operatingIds = ref(new Set())
 const updateProgress = ref(null)
+const groups = ref([])
+const selectedGroupId = ref(null)
+const assigningGroup = ref(false)
 
 const filteredContainers = computed(() => {
   let result = containersStore.containers
@@ -22,7 +27,9 @@ const filteredContainers = computed(() => {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(c =>
       c.name?.toLowerCase().includes(query) ||
-      c.usingImage?.toLowerCase().includes(query)
+      c.usingImage?.toLowerCase().includes(query) ||
+      c.composeProject?.toLowerCase().includes(query) ||
+      c.composeService?.toLowerCase().includes(query)
     )
   }
 
@@ -34,6 +41,11 @@ const filteredContainers = computed(() => {
       if (filterStatus.value === 'stopped') return state === 'exited' || state === 'created'
       return true
     })
+  }
+
+  // 待更新过滤
+  if (filterUpdate.value) {
+    result = result.filter(c => c.haveUpdate)
   }
 
   return result
@@ -57,6 +69,23 @@ function getStatusBadge(state) {
   if (s === 'restarting') return { class: 'badge-info', text: '重启中' }
   if (s === 'created') return { class: 'badge-gray', text: '已创建' }
   return { class: 'badge-gray', text: state || '未知' }
+}
+
+// 卡片点击筛选
+function filterByCard(type) {
+  // 重置其他筛选
+  filterUpdate.value = false
+
+  if (type === 'all') {
+    filterStatus.value = 'all'
+  } else if (type === 'running') {
+    filterStatus.value = filterStatus.value === 'running' ? 'all' : 'running'
+  } else if (type === 'stopped') {
+    filterStatus.value = filterStatus.value === 'stopped' ? 'all' : 'stopped'
+  } else if (type === 'update') {
+    filterStatus.value = 'all'
+    filterUpdate.value = !filterUpdate.value
+  }
 }
 
 async function handleAction(container, action) {
@@ -161,6 +190,48 @@ async function pollProgress(taskId) {
   }
 }
 
+// 群组相关函数
+async function fetchGroups() {
+  try {
+    const response = await api.groups.list()
+    if (response.code === 200) {
+      groups.value = response.data || []
+    }
+  } catch (e) {
+    console.error('获取群组列表失败:', e)
+  }
+}
+
+function openGroupModal(container) {
+  selectedContainer.value = container
+  selectedGroupId.value = null
+  showGroupModal.value = true
+  fetchGroups()
+}
+
+async function handleAssignGroup() {
+  if (!selectedGroupId.value || !selectedContainer.value) return
+
+  assigningGroup.value = true
+  try {
+    const response = await api.containerAssign.assign({
+      groupId: selectedGroupId.value,
+      containerId: selectedContainer.value.id,
+      containerName: selectedContainer.value.name
+    })
+    if (response.code === 200) {
+      showGroupModal.value = false
+      alert('成功加入群组')
+    } else {
+      alert(response.msg || '加入群组失败')
+    }
+  } catch (e) {
+    alert('加入群组失败: ' + e.message)
+  } finally {
+    assigningGroup.value = false
+  }
+}
+
 onMounted(() => {
   containersStore.fetchContainers()
 })
@@ -170,7 +241,10 @@ onMounted(() => {
   <div class="space-y-6">
     <!-- 统计卡片 -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="card card-hover p-4">
+      <div
+        @click="filterByCard('all')"
+        :class="['card card-hover p-4 cursor-pointer transition-all', filterStatus === 'all' && !filterUpdate ? 'ring-2 ring-primary-500' : '']"
+      >
         <div class="flex items-center gap-3">
           <div class="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
             <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -184,7 +258,10 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="card card-hover p-4">
+      <div
+        @click="filterByCard('running')"
+        :class="['card card-hover p-4 cursor-pointer transition-all', filterStatus === 'running' ? 'ring-2 ring-emerald-500' : '']"
+      >
         <div class="flex items-center gap-3">
           <div class="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
             <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -198,7 +275,10 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="card card-hover p-4">
+      <div
+        @click="filterByCard('stopped')"
+        :class="['card card-hover p-4 cursor-pointer transition-all', filterStatus === 'stopped' ? 'ring-2 ring-gray-500' : '']"
+      >
         <div class="flex items-center gap-3">
           <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
             <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -213,7 +293,10 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="card card-hover p-4">
+      <div
+        @click="filterByCard('update')"
+        :class="['card card-hover p-4 cursor-pointer transition-all', filterUpdate ? 'ring-2 ring-amber-500' : '']"
+      >
         <div class="flex items-center gap-3">
           <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
             <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -239,7 +322,7 @@ onMounted(() => {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="搜索容器名称或镜像..."
+            placeholder="搜索容器名称、镜像或 Compose 项目..."
             class="input pl-10"
           />
         </div>
@@ -335,6 +418,10 @@ onMounted(() => {
               <span v-if="container.isSelf" class="badge badge-info">
                 本服务
               </span>
+              <!-- Compose 标签 -->
+              <span v-if="container.composeProject" class="badge badge-purple" :title="`Compose: ${container.composeProject}/${container.composeService}`">
+                {{ container.composeProject }}/{{ container.composeService }}
+              </span>
             </div>
 
             <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
@@ -409,6 +496,17 @@ onMounted(() => {
             >
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+
+            <button
+              @click="openGroupModal(container)"
+              :disabled="operatingIds.has(container.id)"
+              class="btn btn-sm btn-ghost text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+              title="加入群组"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </button>
 
@@ -500,6 +598,70 @@ onMounted(() => {
             {{ updateProgress?.status === 'completed' || updateProgress?.status === 'failed' ? '关闭' : '取消' }}
           </button>
           <button v-if="!updateProgress" @click="handleUpdate" class="btn btn-warning">确认更新</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 加入群组弹窗 -->
+    <div v-if="showGroupModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+      <div class="card w-full max-w-md p-6 animate-scale-in" @click.stop>
+        <div class="flex items-center gap-3 mb-4">
+          <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+            <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">加入群组</h3>
+        </div>
+
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+          将容器 <strong class="text-gray-900 dark:text-white">{{ selectedContainer?.name }}</strong> 加入群组
+        </p>
+
+        <div v-if="groups.length === 0" class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-center text-gray-500 dark:text-gray-400">
+          暂无群组，请先在群组管理中创建群组
+        </div>
+
+        <div v-else class="space-y-2 mb-4 max-h-60 overflow-y-auto">
+          <label
+            v-for="group in groups"
+            :key="group.id"
+            :class="[
+              'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
+              selectedGroupId === group.id
+                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                : 'border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-700'
+            ]"
+          >
+            <input
+              type="radio"
+              :value="group.id"
+              v-model="selectedGroupId"
+              class="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
+            />
+            <div class="flex-1">
+              <p class="font-medium text-gray-900 dark:text-white">{{ group.name }}</p>
+              <p class="text-sm text-gray-500 dark:text-gray-400">
+                {{ group.autoUpdate ? '自动更新' : '手动更新' }}
+                <span v-if="group.cronExpr"> | {{ group.cronExpr }}</span>
+              </p>
+            </div>
+          </label>
+        </div>
+
+        <div class="flex justify-end gap-3">
+          <button @click="showGroupModal = false" class="btn btn-secondary" :disabled="assigningGroup">取消</button>
+          <button
+            @click="handleAssignGroup"
+            class="btn btn-primary"
+            :disabled="!selectedGroupId || assigningGroup"
+          >
+            <svg v-if="assigningGroup" class="w-4 h-4 animate-spin mr-1" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            {{ assigningGroup ? '加入中...' : '确认加入' }}
+          </button>
         </div>
       </div>
     </div>

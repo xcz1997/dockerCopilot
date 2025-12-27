@@ -19,6 +19,11 @@ if [ -z "$secretKey" ]; then
     export secretKey="$DEFAULT_SECRET_KEY"
 fi
 
+# 本地开发使用 ./data 目录
+if [ -z "$DATA_DIR" ]; then
+    export DATA_DIR="./data"
+fi
+
 echo ""
 echo -e "${BLUE}================================${NC}"
 echo -e "${BLUE}  Docker Copilot 开发模式${NC}"

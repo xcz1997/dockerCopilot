@@ -53,14 +53,18 @@ func (l *BarkTestLogic) BarkTest(req *types.BarkTestReq) (resp *types.Resp, err 
 	return resp, nil
 }
 
+// Docker 图标 URL
+const dockerIconURL = "https://www.docker.com/wp-content/uploads/2022/03/Moby-logo.png"
+
 // sendBarkNotification 发送 Bark 通知
 func sendBarkNotification(server, key, title, body string) error {
-	// 构建 URL
-	barkURL := fmt.Sprintf("%s/%s/%s/%s",
+	// 构建 URL，添加图标参数
+	barkURL := fmt.Sprintf("%s/%s/%s/%s?icon=%s&group=DockerCopilot",
 		server,
 		key,
 		url.PathEscape(title),
 		url.PathEscape(body),
+		url.QueryEscape(dockerIconURL),
 	)
 
 	client := &http.Client{Timeout: 10 * time.Second}

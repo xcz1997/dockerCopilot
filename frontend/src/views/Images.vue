@@ -6,10 +6,13 @@ const imagesStore = useImagesStore()
 
 const searchQuery = ref('')
 const filterType = ref('all')
+const filterUpdate = ref(false)
 const showDeleteModal = ref(false)
+const showPullModal = ref(false)
 const selectedImage = ref(null)
 const forceDelete = ref(false)
 const deletingIds = ref(new Set())
+const pullingIds = ref(new Set())
 
 const filteredImages = computed(() => {
   let result = imagesStore.images
@@ -30,6 +33,11 @@ const filteredImages = computed(() => {
     result = result.filter(img => !img.inUsed)
   }
 
+  // 待更新过滤
+  if (filterUpdate.value) {
+    result = result.filter(img => img.haveUpdate)
+  }
+
   return result
 })
 
@@ -39,9 +47,25 @@ const stats = computed(() => {
     total: images.length,
     used: images.filter(img => img.inUsed).length,
     unused: images.filter(img => !img.inUsed).length,
-    totalSize: '-'
+    needsUpdate: images.filter(img => img.haveUpdate).length
   }
 })
+
+// 卡片点击筛选
+function filterByCard(type) {
+  filterUpdate.value = false
+
+  if (type === 'all') {
+    filterType.value = 'all'
+  } else if (type === 'used') {
+    filterType.value = filterType.value === 'used' ? 'all' : 'used'
+  } else if (type === 'unused') {
+    filterType.value = filterType.value === 'unused' ? 'all' : 'unused'
+  } else if (type === 'update') {
+    filterType.value = 'all'
+    filterUpdate.value = !filterUpdate.value
+  }
+}
 
 function getImageFullName(image) {
   if (image.name && image.tag) {
@@ -74,6 +98,30 @@ async function handleDelete() {
   }
 }
 
+function openPullModal(image) {
+  selectedImage.value = image
+  showPullModal.value = true
+}
+
+async function handlePull() {
+  if (!selectedImage.value) return
+
+  const id = selectedImage.value.id
+  const imageName = getImageFullName(selectedImage.value)
+  pullingIds.value.add(id)
+
+  try {
+    const result = await imagesStore.pullImage(imageName)
+    if (result.success) {
+      showPullModal.value = false
+    } else {
+      alert(result.message || '拉取失败')
+    }
+  } finally {
+    pullingIds.value.delete(id)
+  }
+}
+
 onMounted(() => {
   imagesStore.fetchImages()
 })
@@ -83,7 +131,10 @@ onMounted(() => {
   <div class="space-y-6">
     <!-- 统计卡片 -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="card card-hover p-4">
+      <div
+        @click="filterByCard('all')"
+        :class="['card card-hover p-4 cursor-pointer transition-all', filterType === 'all' && !filterUpdate ? 'ring-2 ring-primary-500' : '']"
+      >
         <div class="flex items-center gap-3">
           <div class="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
             <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -97,7 +148,10 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="card card-hover p-4">
+      <div
+        @click="filterByCard('used')"
+        :class="['card card-hover p-4 cursor-pointer transition-all', filterType === 'used' ? 'ring-2 ring-emerald-500' : '']"
+      >
         <div class="flex items-center gap-3">
           <div class="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
             <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -111,7 +165,10 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="card card-hover p-4">
+      <div
+        @click="filterByCard('unused')"
+        :class="['card card-hover p-4 cursor-pointer transition-all', filterType === 'unused' ? 'ring-2 ring-gray-500' : '']"
+      >
         <div class="flex items-center gap-3">
           <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
             <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -125,16 +182,19 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="card card-hover p-4">
+      <div
+        @click="filterByCard('update')"
+        :class="['card card-hover p-4 cursor-pointer transition-all', filterUpdate ? 'ring-2 ring-amber-500' : '']"
+      >
         <div class="flex items-center gap-3">
-          <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-            <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+          <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+            <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </div>
           <div>
-            <p class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ stats.totalSize }}</p>
-            <p class="text-sm text-gray-500 dark:text-gray-400">总大小</p>
+            <p class="text-2xl font-bold text-amber-600 dark:text-amber-400">{{ stats.needsUpdate }}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">待更新</p>
           </div>
         </div>
       </div>
@@ -237,6 +297,9 @@ onMounted(() => {
             <span :class="['badge', image.inUsed ? 'badge-success' : 'badge-gray']">
               {{ image.inUsed ? '使用中' : '未使用' }}
             </span>
+            <span v-if="image.haveUpdate" class="badge badge-warning">
+              有更新
+            </span>
           </div>
 
           <!-- 详细信息 -->
@@ -256,11 +319,26 @@ onMounted(() => {
           </div>
 
           <!-- 操作按钮 -->
-          <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+          <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex gap-2">
+            <button
+              v-if="image.haveUpdate"
+              @click="openPullModal(image)"
+              :disabled="pullingIds.has(image.id)"
+              class="btn btn-sm btn-warning flex-1"
+            >
+              <svg v-if="pullingIds.has(image.id)" class="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              更新镜像
+            </button>
             <button
               @click="openDeleteModal(image)"
               :disabled="deletingIds.has(image.id)"
-              class="btn btn-sm btn-ghost text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 w-full"
+              :class="['btn btn-sm btn-ghost text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20', image.haveUpdate ? 'flex-1' : 'w-full']"
             >
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -306,6 +384,39 @@ onMounted(() => {
         <div class="flex justify-end gap-3">
           <button @click="showDeleteModal = false" class="btn btn-secondary">取消</button>
           <button @click="handleDelete" class="btn btn-danger">确认删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 更新确认弹窗 -->
+    <div v-if="showPullModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+      <div class="card w-full max-w-md p-6 animate-scale-in" @click.stop>
+        <div class="flex items-center gap-3 mb-4">
+          <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+            <svg class="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">更新镜像</h3>
+        </div>
+
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+          确定要拉取镜像 <strong class="text-gray-900 dark:text-white">{{ getImageFullName(selectedImage) }}</strong> 的最新版本吗？
+        </p>
+
+        <p class="text-sm text-gray-500 dark:text-gray-500 mb-4">
+          这将从 Registry 拉取最新的镜像层。
+        </p>
+
+        <div class="flex justify-end gap-3">
+          <button @click="showPullModal = false" class="btn btn-secondary" :disabled="pullingIds.has(selectedImage?.id)">取消</button>
+          <button @click="handlePull" class="btn btn-warning" :disabled="pullingIds.has(selectedImage?.id)">
+            <svg v-if="pullingIds.has(selectedImage?.id)" class="w-4 h-4 animate-spin mr-1" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            {{ pullingIds.has(selectedImage?.id) ? '拉取中...' : '确认更新' }}
+          </button>
         </div>
       </div>
     </div>

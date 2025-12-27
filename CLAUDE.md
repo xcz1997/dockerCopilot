@@ -144,6 +144,7 @@ GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o dockerCopilot .
 |------|------|--------|
 | secretKey | JWT 密钥 | "" |
 | DOCKER_HOST | Docker socket 路径 | unix:///var/run/docker.sock |
+| DATA_DIR | 数据目录（SQLite 数据库存放位置） | /data |
 | BACKUP_DIR | 备份目录 | /data/backups |
 | TZ | 时区 | Asia/Shanghai |
 

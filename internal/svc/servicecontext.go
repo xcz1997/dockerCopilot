@@ -2,6 +2,7 @@ package svc
 
 import (
 	"database/sql"
+	"os"
 	"sync"
 
 	"github.com/docker/docker/client"
@@ -46,8 +47,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		logx.Errorf("Unable to create docker client: %s", err)
 	}
 
-	// 初始化数据库
-	db, err := model.InitDB("./data")
+	// 初始化数据库，优先从环境变量读取数据目录，默认 /data
+	dataDir := os.Getenv("DATA_DIR")
+	if dataDir == "" {
+		dataDir = "/data"
+	}
+	db, err := model.InitDB(dataDir)
 	if err != nil {
 		logx.Errorf("Unable to initialize database: %s", err)
 	}
