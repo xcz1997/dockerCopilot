@@ -47,6 +47,10 @@ func (l *ImagesListLogic) ImagesList() (resp *types.Resp, err error) {
 	resp.Msg = "success"
 	var imageInfoList []Info
 	for _, v := range list {
+		// 跳过 dangling 镜像（没有 RepoTags 的孤立镜像）
+		if v.ImageName == "None" || v.ImageTag == "None" {
+			continue
+		}
 		var imageInfo Info
 		imageInfo.Id = v.ID
 		imageInfo.Name = v.ImageName
