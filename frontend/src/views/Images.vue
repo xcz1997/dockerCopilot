@@ -18,16 +18,16 @@ const filteredImages = computed(() => {
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(img =>
-      img.ImageName?.toLowerCase().includes(query) ||
-      img.ImageTag?.toLowerCase().includes(query)
+      img.name?.toLowerCase().includes(query) ||
+      img.tag?.toLowerCase().includes(query)
     )
   }
 
   // 类型过滤
   if (filterType.value === 'used') {
-    result = result.filter(img => img.InUsed)
+    result = result.filter(img => img.inUsed)
   } else if (filterType.value === 'unused') {
-    result = result.filter(img => !img.InUsed)
+    result = result.filter(img => !img.inUsed)
   }
 
   return result
@@ -35,37 +35,19 @@ const filteredImages = computed(() => {
 
 const stats = computed(() => {
   const images = imagesStore.images
-  const totalSize = images.reduce((acc, img) => acc + (img.Size || 0), 0)
   return {
     total: images.length,
-    used: images.filter(img => img.InUsed).length,
-    unused: images.filter(img => !img.InUsed).length,
-    totalSize: formatSize(totalSize)
+    used: images.filter(img => img.inUsed).length,
+    unused: images.filter(img => !img.inUsed).length,
+    totalSize: '-'
   }
 })
 
-function formatSize(bytes) {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let i = 0
-  while (bytes >= 1024 && i < units.length - 1) {
-    bytes /= 1024
-    i++
-  }
-  return `${bytes.toFixed(1)} ${units[i]}`
-}
-
-function formatTime(timestamp) {
-  if (!timestamp) return '-'
-  const date = new Date(timestamp * 1000)
-  return date.toLocaleDateString('zh-CN')
-}
-
 function getImageFullName(image) {
-  if (image.ImageName && image.ImageTag) {
-    return `${image.ImageName}:${image.ImageTag}`
+  if (image.name && image.tag) {
+    return `${image.name}:${image.tag}`
   }
-  return image.Id?.substring(7, 19) || 'unknown'
+  return image.id?.substring(7, 19) || 'unknown'
 }
 
 function openDeleteModal(image) {
@@ -77,7 +59,7 @@ function openDeleteModal(image) {
 async function handleDelete() {
   if (!selectedImage.value) return
 
-  const id = selectedImage.value.Id
+  const id = selectedImage.value.id
   deletingIds.value.add(id)
 
   try {
@@ -235,7 +217,7 @@ onMounted(() => {
     <div v-else class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       <div
         v-for="image in filteredImages"
-        :key="image.Id"
+        :key="image.id"
         class="card card-hover p-5 animate-fade-in"
       >
         <div class="flex flex-col h-full">
@@ -248,12 +230,12 @@ onMounted(() => {
             </div>
             <div class="flex-1 min-w-0">
               <h3 class="font-semibold text-gray-900 dark:text-white truncate" :title="getImageFullName(image)">
-                {{ image.ImageName || 'none' }}
+                {{ image.name || 'none' }}
               </h3>
-              <p class="text-sm text-gray-500 dark:text-gray-400">{{ image.ImageTag || 'none' }}</p>
+              <p class="text-sm text-gray-500 dark:text-gray-400">{{ image.tag || 'none' }}</p>
             </div>
-            <span :class="['badge', image.InUsed ? 'badge-success' : 'badge-gray']">
-              {{ image.InUsed ? '使用中' : '未使用' }}
+            <span :class="['badge', image.inUsed ? 'badge-success' : 'badge-gray']">
+              {{ image.inUsed ? '使用中' : '未使用' }}
             </span>
           </div>
 
@@ -261,15 +243,15 @@ onMounted(() => {
           <div class="flex-1 space-y-2 text-sm">
             <div class="flex justify-between">
               <span class="text-gray-500 dark:text-gray-400">大小</span>
-              <span class="font-medium text-gray-900 dark:text-white">{{ image.SizeFormat || formatSize(image.Size) }}</span>
+              <span class="font-medium text-gray-900 dark:text-white">{{ image.size || '-' }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-gray-500 dark:text-gray-400">创建时间</span>
-              <span class="font-medium text-gray-900 dark:text-white">{{ formatTime(image.Created) }}</span>
+              <span class="font-medium text-gray-900 dark:text-white">{{ image.createTime || '-' }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-gray-500 dark:text-gray-400">ID</span>
-              <span class="font-mono text-xs text-gray-600 dark:text-gray-400">{{ image.Id?.substring(7, 19) }}</span>
+              <span class="font-mono text-xs text-gray-600 dark:text-gray-400">{{ image.id?.substring(7, 19) }}</span>
             </div>
           </div>
 
@@ -277,7 +259,7 @@ onMounted(() => {
           <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
             <button
               @click="openDeleteModal(image)"
-              :disabled="deletingIds.has(image.Id)"
+              :disabled="deletingIds.has(image.id)"
               class="btn btn-sm btn-ghost text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 w-full"
             >
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -306,7 +288,7 @@ onMounted(() => {
           确定要删除镜像 <strong class="text-gray-900 dark:text-white">{{ getImageFullName(selectedImage) }}</strong> 吗？
         </p>
 
-        <div v-if="selectedImage?.InUsed" class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
+        <div v-if="selectedImage?.inUsed" class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
           <p class="text-sm text-amber-800 dark:text-amber-300">
             此镜像正在被容器使用，需要强制删除。
           </p>
