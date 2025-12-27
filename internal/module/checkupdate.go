@@ -30,10 +30,17 @@ func NewImageCheck() *ImageUpdateData {
 		Data: map[string]ImageCheckList{},
 	}
 }
+// IsSelfImage 判断是否为 DockerCopilot 自身镜像
+func IsSelfImage(imageName string) bool {
+	lowerName := strings.ToLower(imageName)
+	return strings.Contains(lowerName, "dockercopilot") ||
+		strings.Contains(lowerName, "docker-copilot")
+}
+
 func (i *ImageUpdateData) CheckUpdate(imageList []types.Image) {
 	for _, image := range imageList {
 		// 跳过自身镜像
-		if strings.Contains(image.ImageName, "0nlylty/dockercopilot") {
+		if IsSelfImage(image.ImageName) {
 			continue
 		}
 		// 跳过无效镜像（无 RepoTags 和 RepoDigests 的孤立镜像）
