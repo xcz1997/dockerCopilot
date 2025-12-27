@@ -188,7 +188,7 @@ build_go() {
         -e CGO_ENABLED=0 \
         -e GOPROXY=https://goproxy.cn,direct \
         golang:${GO_VERSION}-alpine \
-        go build -ldflags "-s -w -X 'github.com/onlyLTY/dockerCopilot/internal/config.Version=${VERSION}' -X 'github.com/onlyLTY/dockerCopilot/internal/config.BuildDate=${BUILD_DATE}' -X 'github.com/onlyLTY/dockerCopilot/internal/config.GitCommit=${GIT_COMMIT}'" \
+        go build -ldflags "-s -w -X 'github.com/xcz1997/dockerCopilot/internal/config.Version=${VERSION}' -X 'github.com/xcz1997/dockerCopilot/internal/config.BuildDate=${BUILD_DATE}' -X 'github.com/xcz1997/dockerCopilot/internal/config.GitCommit=${GIT_COMMIT}'" \
         -o "${OUTPUT_DIR}/${output_name}" \
         .
 

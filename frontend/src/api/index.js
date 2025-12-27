@@ -73,6 +73,29 @@ const api = {
 
   progress: {
     get: (taskId) => instance.get(`/progress/${taskId}`)
+  },
+
+  groups: {
+    list: () => instance.get('/groups'),
+    get: (id) => instance.get(`/group/${id}`),
+    create: (data) => instance.post('/group', data, { headers: { 'Content-Type': 'application/json' } }),
+    update: (id, data) => instance.put(`/group/${id}`, data, { headers: { 'Content-Type': 'application/json' } }),
+    delete: (id) => instance.delete(`/group/${id}`),
+    check: (id) => instance.post(`/group/${id}/check`),
+    triggerUpdate: (id) => instance.post(`/group/${id}/update`),
+    history: (params) => instance.get('/group/history', { params })
+  },
+
+  rules: {
+    create: (data) => instance.post('/group/rule', data, { headers: { 'Content-Type': 'application/json' } }),
+    delete: (id) => instance.delete(`/group/rule/${id}`),
+    preview: (ruleType, pattern) => instance.get('/group/rule/preview', { params: { ruleType, pattern } })
+  },
+
+  containerAssign: {
+    list: () => instance.get('/containers/assignments'),
+    assign: (data) => instance.post('/group/container', data, { headers: { 'Content-Type': 'application/json' } }),
+    unassign: (id) => instance.delete(`/group/container/${id}`)
   }
 }
 

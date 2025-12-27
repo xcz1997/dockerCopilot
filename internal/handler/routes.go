@@ -6,12 +6,13 @@ package handler
 import (
 	"net/http"
 
-	auth "github.com/onlyLTY/dockerCopilot/internal/handler/auth"
-	container "github.com/onlyLTY/dockerCopilot/internal/handler/container"
-	image "github.com/onlyLTY/dockerCopilot/internal/handler/image"
-	progress "github.com/onlyLTY/dockerCopilot/internal/handler/progress"
-	version "github.com/onlyLTY/dockerCopilot/internal/handler/version"
-	"github.com/onlyLTY/dockerCopilot/internal/svc"
+	auth "github.com/xcz1997/dockerCopilot/internal/handler/auth"
+	container "github.com/xcz1997/dockerCopilot/internal/handler/container"
+	"github.com/xcz1997/dockerCopilot/internal/handler/group"
+	image "github.com/xcz1997/dockerCopilot/internal/handler/image"
+	progress "github.com/xcz1997/dockerCopilot/internal/handler/progress"
+	version "github.com/xcz1997/dockerCopilot/internal/handler/version"
+	"github.com/xcz1997/dockerCopilot/internal/svc"
 
 	"github.com/zeromicro/go-zero/rest"
 )
@@ -125,6 +126,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: progress.GetProgressHandler(serverCtx),
 			},
 		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)
 
@@ -139,6 +141,84 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodGet,
 				Path:    "/version",
 				Handler: version.VersionHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	// 群组管理路由
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/groups",
+				Handler: group.GroupListHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/group/:id",
+				Handler: group.GroupGetHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/group",
+				Handler: group.GroupCreateHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/group/:id",
+				Handler: group.GroupUpdateHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/group/:id",
+				Handler: group.GroupDeleteHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/group/rule",
+				Handler: group.RuleCreateHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/group/rule/:id",
+				Handler: group.RuleDeleteHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/group/rule/preview",
+				Handler: group.RulePreviewHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/group/container",
+				Handler: group.ContainerAssignHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/group/container/:id",
+				Handler: group.ContainerUnassignHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/containers/assignments",
+				Handler: group.ContainerAssignmentsHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/group/:id/check",
+				Handler: group.GroupCheckHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/group/:id/update",
+				Handler: group.GroupUpdateActionHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/group/history",
+				Handler: group.HistoryListHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

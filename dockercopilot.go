@@ -8,12 +8,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
-	"github.com/onlyLTY/dockerCopilot/internal/config"
-	"github.com/onlyLTY/dockerCopilot/internal/handler"
-	"github.com/onlyLTY/dockerCopilot/internal/svc"
-	"github.com/onlyLTY/dockerCopilot/internal/utiles"
+	"github.com/xcz1997/dockerCopilot/internal/config"
+	"github.com/xcz1997/dockerCopilot/internal/handler"
+	"github.com/xcz1997/dockerCopilot/internal/svc"
+	"github.com/xcz1997/dockerCopilot/internal/utiles"
 	"github.com/robfig/cron/v3"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -63,6 +62,15 @@ func main() {
 		}))
 	defer server.Stop()
 	ctx := svc.NewServiceContext(c)
+
+	// 启动群组调度器
+	if ctx.GroupScheduler != nil {
+		if err := ctx.GroupScheduler.Start(); err != nil {
+			logx.Errorf("启动群组调度器失败: %v", err)
+		}
+		defer ctx.GroupScheduler.Stop()
+	}
+
 	list, err := utiles.GetImagesList(ctx)
 	if err != nil {
 		logx.Errorf("panic获取镜像列表出错: %v", err)
@@ -107,56 +115,33 @@ func main() {
 	server.Start()
 }
 func RegisterHandlers(engine *rest.Server) {
+	// 创建静态资源处理器
 	frontFS, err := fs.Sub(embeddedFront, "front")
 	if err != nil {
 		log.Fatal(err)
 	}
+	fileServer := http.FileServer(http.FS(frontFS))
+	indexHTML, _ := fs.ReadFile(frontFS, "index.html")
 
-	// 读取 index.html 用于 SPA 回退
-	indexHTML, err := fs.ReadFile(frontFS, "index.html")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// SPA 回退处理器：返回 index.html
+	// SPA 处理器
 	spaHandler := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(indexHTML)
 	}
 
 	// 静态资源处理器
-	assetsHandler := http.FileServer(http.FS(frontFS))
+	assetsHandler := func(w http.ResponseWriter, r *http.Request) {
+		fileServer.ServeHTTP(w, r)
+	}
 
-	engine.AddRoutes(
-		[]rest.Route{
-			{
-				Method: http.MethodGet,
-				Path:   "/manager",
-				Handler: spaHandler,
-			},
-			{
-				Method: http.MethodGet,
-				Path:   "/manager/assets/:path",
-				Handler: func(w http.ResponseWriter, r *http.Request) {
-					// 去掉 /manager 前缀
-					r.URL.Path = strings.TrimPrefix(r.URL.Path, "/manager")
-					assetsHandler.ServeHTTP(w, r)
-				},
-			},
-			{
-				Method: http.MethodGet,
-				Path:   "/manager/:path",
-				Handler: spaHandler, // SPA 路由回退到 index.html
-			},
-			{
-				Method: http.MethodGet,
-				Path:   "/assets/:path",
-				Handler: func(w http.ResponseWriter, r *http.Request) {
-					assetsHandler.ServeHTTP(w, r)
-				},
-			},
-		},
-	)
+	// 注册 SPA 路由
+	spaRoutes := []string{"/manager", "/manager/containers", "/manager/images", "/manager/groups", "/manager/backups", "/manager/settings", "/manager/login"}
+	for _, path := range spaRoutes {
+		engine.AddRoute(rest.Route{Method: http.MethodGet, Path: path, Handler: spaHandler})
+	}
+
+	// 注册静态资源路由 (文件名现在只有哈希，没有特殊字符)
+	engine.AddRoute(rest.Route{Method: http.MethodGet, Path: "/assets/:file", Handler: assetsHandler})
 }
 
 // 检查并创建日志目录

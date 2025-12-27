@@ -93,3 +93,59 @@ type VersionReq struct {
 type GetNewImageReq struct {
 	ImageNameAndTag string `json:"image_name_and_tag"`
 }
+
+// ======== 群组管理类型 ========
+
+type GroupCreateReq struct {
+	Name        string `json:"name"`
+	CronExpr    string `json:"cronExpr,optional"`
+	AutoUpdate  bool   `json:"autoUpdate,optional"`
+	CheckUpdate bool   `json:"checkUpdate,default=true"`
+	Priority    int    `json:"priority,default=100"`
+	Enabled     bool   `json:"enabled,default=true"`
+}
+
+type GroupUpdateReq struct {
+	Id          int64  `path:"id"`
+	Name        string `json:"name,optional"`
+	CronExpr    string `json:"cronExpr,optional"`
+	AutoUpdate  bool   `json:"autoUpdate,optional"`
+	CheckUpdate bool   `json:"checkUpdate,optional"`
+	Priority    int    `json:"priority,optional"`
+	Enabled     bool   `json:"enabled,optional"`
+}
+
+type GroupIdReq struct {
+	Id int64 `path:"id"`
+}
+
+type RuleCreateReq struct {
+	GroupId  int64  `json:"groupId"`
+	RuleType string `json:"ruleType"`
+	Pattern  string `json:"pattern"`
+}
+
+type RuleIdReq struct {
+	Id int64 `path:"id"`
+}
+
+type ContainerAssignReq struct {
+	GroupId       int64  `json:"groupId"`
+	ContainerId   string `json:"containerId"`
+	ContainerName string `json:"containerName"`
+}
+
+type ContainerAssignIdReq struct {
+	Id int64 `path:"id"`
+}
+
+type RulePreviewReq struct {
+	RuleType string `form:"ruleType"`
+	Pattern  string `form:"pattern"`
+}
+
+type HistoryListReq struct {
+	Page    int   `form:"page,default=1"`
+	Size    int   `form:"size,default=20"`
+	GroupId int64 `form:"groupId,optional"`
+}

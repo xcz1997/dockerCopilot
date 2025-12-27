@@ -3,7 +3,7 @@ package logic
 import (
 	"context"
 
-	"github.com/onlyLTY/dockerCopilot/internal/svc"
+	"github.com/xcz1997/dockerCopilot/internal/svc"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 

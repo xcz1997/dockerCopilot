@@ -1,12 +1,16 @@
 package svc
 
 import (
+	"database/sql"
+	"sync"
+
 	"github.com/docker/docker/client"
-	"github.com/onlyLTY/dockerCopilot/internal/config"
-	"github.com/onlyLTY/dockerCopilot/internal/module"
+	"github.com/xcz1997/dockerCopilot/internal/config"
+	"github.com/xcz1997/dockerCopilot/internal/model"
+	"github.com/xcz1997/dockerCopilot/internal/module"
+	"github.com/xcz1997/dockerCopilot/internal/scheduler"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest"
-	"sync"
 )
 
 type ServiceContext struct {
@@ -20,6 +24,8 @@ type ServiceContext struct {
 	IndexCheckMiddleware       rest.Middleware
 	ProgressStore              ProgressStoreType
 	DockerClient               *client.Client
+	DB                         *sql.DB
+	GroupScheduler             *scheduler.GroupScheduler
 	mu                         sync.Mutex
 }
 
@@ -39,11 +45,26 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err != nil {
 		logx.Errorf("Unable to create docker client: %s", err)
 	}
+
+	// 初始化数据库
+	db, err := model.InitDB("./data")
+	if err != nil {
+		logx.Errorf("Unable to initialize database: %s", err)
+	}
+
+	// 创建镜像更新检查器
+	hubImageInfo := module.NewImageCheck()
+
+	// 创建群组调度器
+	groupScheduler := scheduler.NewGroupScheduler(cli, hubImageInfo)
+
 	return &ServiceContext{
-		Config:        c,
-		HubImageInfo:  module.NewImageCheck(),
-		ProgressStore: make(ProgressStoreType),
-		DockerClient:  cli,
+		Config:         c,
+		HubImageInfo:   hubImageInfo,
+		ProgressStore:  make(ProgressStoreType),
+		DockerClient:   cli,
+		DB:             db,
+		GroupScheduler: groupScheduler,
 	}
 }
 

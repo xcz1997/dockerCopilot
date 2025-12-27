@@ -38,6 +38,11 @@ const router = createRouter({
           path: 'settings',
           name: 'settings',
           component: () => import('@/views/Settings.vue')
+        },
+        {
+          path: 'groups',
+          name: 'groups',
+          component: () => import('@/views/Groups.vue')
         }
       ]
     },

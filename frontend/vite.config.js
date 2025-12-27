@@ -4,7 +4,7 @@ import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [vue()],
-  base: '/manager/',
+  base: '/',
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')
@@ -12,7 +12,17 @@ export default defineConfig({
   },
   build: {
     outDir: '../front',
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // 使用纯哈希文件名，避免任何特殊字符
+        entryFileNames: 'assets/[hash].js',
+        chunkFileNames: 'assets/[hash].js',
+        assetFileNames: 'assets/[hash].[ext]',
+        // 禁用代码分割，合并为单个文件
+        manualChunks: undefined
+      }
+    }
   },
   server: {
     proxy: {

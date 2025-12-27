@@ -91,6 +91,62 @@ type VersionReq {
 	Type string `form:"type"`
 }
 
+// ======== 群组管理类型定义 ========
+
+type GroupCreateReq {
+	Name        string `json:"name"`
+	CronExpr    string `json:"cronExpr,optional"`
+	AutoUpdate  bool   `json:"autoUpdate,optional"`
+	CheckUpdate bool   `json:"checkUpdate,default=true"`
+	Priority    int    `json:"priority,default=100"`
+	Enabled     bool   `json:"enabled,default=true"`
+}
+
+type GroupUpdateReq {
+	Id          int64  `path:"id"`
+	Name        string `json:"name,optional"`
+	CronExpr    string `json:"cronExpr,optional"`
+	AutoUpdate  bool   `json:"autoUpdate,optional"`
+	CheckUpdate bool   `json:"checkUpdate,optional"`
+	Priority    int    `json:"priority,optional"`
+	Enabled     bool   `json:"enabled,optional"`
+}
+
+type GroupIdReq {
+	Id int64 `path:"id"`
+}
+
+type RuleCreateReq {
+	GroupId  int64  `json:"groupId"`
+	RuleType string `json:"ruleType"`
+	Pattern  string `json:"pattern"`
+}
+
+type RuleIdReq {
+	Id int64 `path:"id"`
+}
+
+type ContainerAssignReq {
+	GroupId       int64  `json:"groupId"`
+	ContainerId   string `json:"containerId"`
+	ContainerName string `json:"containerName"`
+}
+
+type ContainerAssignIdReq {
+	Id int64 `path:"id"`
+}
+
+type RulePreviewReq {
+	RuleType string `form:"ruleType"`
+	Pattern  string `form:"pattern"`
+}
+
+type HistoryListReq {
+	Page    int   `form:"page,default=1"`
+	Size    int   `form:"size,default=20"`
+	GroupId int64 `form:"groupId,optional"`
+}
+
 service dockerCopilot {
 	@handler webindex
 		get /
@@ -178,5 +234,56 @@ service dockerCopilot {
 
 	@handler updateProgram
 		put /program returns (Resp)
+}
+
+// ======== 群组管理路由 ========
+
+@server(
+	prefix: /api
+	group: group
+	jwt: Auth
+)
+service dockerCopilot {
+	@handler groupList
+	get /groups returns (Resp)
+
+	@handler groupGet
+	get /group/:id (GroupIdReq) returns (Resp)
+
+	@handler groupCreate
+	post /group (GroupCreateReq) returns (Resp)
+
+	@handler groupUpdate
+	put /group/:id (GroupUpdateReq) returns (Resp)
+
+	@handler groupDelete
+	delete /group/:id (GroupIdReq) returns (Resp)
+
+	@handler ruleCreate
+	post /group/rule (RuleCreateReq) returns (Resp)
+
+	@handler ruleDelete
+	delete /group/rule/:id (RuleIdReq) returns (Resp)
+
+	@handler rulePreview
+	get /group/rule/preview (RulePreviewReq) returns (Resp)
+
+	@handler containerAssign
+	post /group/container (ContainerAssignReq) returns (Resp)
+
+	@handler containerUnassign
+	delete /group/container/:id (ContainerAssignIdReq) returns (Resp)
+
+	@handler containerAssignments
+	get /containers/assignments returns (Resp)
+
+	@handler groupCheck
+	post /group/:id/check (GroupIdReq) returns (Resp)
+
+	@handler groupUpdate2
+	post /group/:id/update (GroupIdReq) returns (Resp)
+
+	@handler historyList
+	get /group/history (HistoryListReq) returns (Resp)
 }
 
