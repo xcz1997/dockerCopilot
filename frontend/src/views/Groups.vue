@@ -1,8 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useGroupsStore } from '@/stores/groups'
 import { useContainersStore } from '@/stores/containers'
 
+const router = useRouter()
 const groupsStore = useGroupsStore()
 const containersStore = useContainersStore()
 
@@ -150,7 +152,12 @@ async function checkGroup(group) {
   operatingIds.value.add(group.id)
   try {
     const result = await groupsStore.checkGroup(group.id)
-    alert(result.message || '检查任务已触发')
+    if (result.success && result.data?.taskId) {
+      // 跳转到任务页面查看进度
+      router.push({ name: 'tasks' })
+    } else {
+      alert(result.message || '检查任务已触发')
+    }
   } finally {
     operatingIds.value.delete(group.id)
   }
@@ -161,7 +168,12 @@ async function triggerUpdate(group) {
   operatingIds.value.add(group.id)
   try {
     const result = await groupsStore.triggerGroupUpdate(group.id)
-    alert(result.message || '更新任务已触发')
+    if (result.success && result.data?.taskId) {
+      // 跳转到任务页面查看进度
+      router.push({ name: 'tasks' })
+    } else {
+      alert(result.message || '更新任务已触发')
+    }
   } finally {
     operatingIds.value.delete(group.id)
   }

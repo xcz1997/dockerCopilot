@@ -88,7 +88,7 @@ export const useGroupsStore = defineStore('groups', () => {
   async function checkGroup(id) {
     try {
       const response = await api.groups.check(id)
-      return { success: response.code === 200, message: response.msg }
+      return { success: response.code === 200, message: response.msg, data: response.data }
     } catch (e) {
       return { success: false, message: e.message }
     }
@@ -97,7 +97,7 @@ export const useGroupsStore = defineStore('groups', () => {
   async function triggerGroupUpdate(id) {
     try {
       const response = await api.groups.triggerUpdate(id)
-      return { success: response.code === 200, message: response.msg }
+      return { success: response.code === 200, message: response.msg, data: response.data }
     } catch (e) {
       return { success: false, message: e.message }
     }

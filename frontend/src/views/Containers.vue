@@ -1,8 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useContainersStore } from '@/stores/containers'
 import api from '@/api'
 
+const router = useRouter()
 const containersStore = useContainersStore()
 
 const searchQuery = ref('')
@@ -187,6 +189,30 @@ async function pollProgress(taskId) {
 
     await new Promise(resolve => setTimeout(resolve, 1000))
     retries++
+  }
+}
+
+// 后台更新 - 不等待结果，跳转到任务页面
+async function handleBackgroundUpdate() {
+  const container = selectedContainer.value
+  const id = container.id
+
+  try {
+    const result = await containersStore.updateContainer(
+      id,
+      container.usingImage,
+      container.name
+    )
+
+    if (result.success && result.data?.taskId) {
+      showUpdateModal.value = false
+      // 跳转到任务页面
+      router.push({ name: 'tasks' })
+    } else if (!result.success) {
+      alert(result.message || '更新失败')
+    }
+  } catch (e) {
+    alert('更新失败: ' + e.message)
   }
 }
 
@@ -596,6 +622,12 @@ onMounted(() => {
         <div class="flex justify-end gap-3">
           <button @click="showUpdateModal = false" class="btn btn-secondary" :disabled="updateProgress && updateProgress.status !== 'completed' && updateProgress.status !== 'failed'">
             {{ updateProgress?.status === 'completed' || updateProgress?.status === 'failed' ? '关闭' : '取消' }}
+          </button>
+          <button v-if="!updateProgress" @click="handleBackgroundUpdate" class="btn btn-ghost text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20">
+            <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            后台更新
           </button>
           <button v-if="!updateProgress" @click="handleUpdate" class="btn btn-warning">确认更新</button>
         </div>

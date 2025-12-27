@@ -2,23 +2,30 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/docker/docker/client"
+	"github.com/robfig/cron/v3"
 	"github.com/xcz1997/dockerCopilot/internal/model"
 	"github.com/xcz1997/dockerCopilot/internal/module"
-	"github.com/robfig/cron/v3"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
+// TaskProgressUpdater 任务进度更新接口
+type TaskProgressUpdater interface {
+	UpdateProgress(taskID string, percentage int, message string, name string, detailMsg string, isDone bool)
+}
+
 // GroupScheduler 群组调度器
 type GroupScheduler struct {
-	cron          *cron.Cron
-	dockerClient  *client.Client
-	hubImageInfo  *module.ImageUpdateData
-	jobs          map[int64]cron.EntryID // groupID -> entryID
-	mu            sync.RWMutex
-	progressFunc  func(taskID string, percentage int, message string, name string, detailMsg string, isDone bool)
+	cron            *cron.Cron
+	dockerClient    *client.Client
+	hubImageInfo    *module.ImageUpdateData
+	jobs            map[int64]cron.EntryID // groupID -> entryID
+	mu              sync.RWMutex
+	progressUpdater TaskProgressUpdater
 }
 
 // NewGroupScheduler 创建群组调度器
@@ -33,9 +40,21 @@ func NewGroupScheduler(dockerClient *client.Client, hubImageInfo *module.ImageUp
 	}
 }
 
-// SetProgressFunc 设置进度回调函数
-func (s *GroupScheduler) SetProgressFunc(fn func(taskID string, percentage int, message string, name string, detailMsg string, isDone bool)) {
-	s.progressFunc = fn
+// SetProgressUpdater 设置进度更新器
+func (s *GroupScheduler) SetProgressUpdater(updater TaskProgressUpdater) {
+	s.progressUpdater = updater
+}
+
+// updateProgress 更新任务进度
+func (s *GroupScheduler) updateProgress(taskID string, percentage int, message string, name string, detailMsg string, isDone bool) {
+	if s.progressUpdater != nil {
+		s.progressUpdater.UpdateProgress(taskID, percentage, message, name, detailMsg, isDone)
+	}
+}
+
+// generateTaskID 生成任务ID
+func (s *GroupScheduler) generateTaskID(prefix string) string {
+	return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
 }
 
 // Start 启动调度器
@@ -116,15 +135,17 @@ func (s *GroupScheduler) UpdateJob(group model.ContainerGroup) error {
 	return nil
 }
 
-// TriggerGroup 手动触发群组检查/更新
-func (s *GroupScheduler) TriggerGroup(groupID int64, forceUpdate bool) {
+// TriggerGroup 手动触发群组检查/更新，返回任务ID
+func (s *GroupScheduler) TriggerGroup(groupID int64, forceUpdate bool) string {
+	taskID := s.generateTaskID("group")
 	go func() {
 		if forceUpdate {
-			s.executeGroupUpdate(groupID)
+			s.executeGroupUpdateWithProgress(groupID, taskID)
 		} else {
-			s.executeGroup(groupID)
+			s.executeGroupWithProgress(groupID, taskID)
 		}
 	}()
+	return taskID
 }
 
 // executeGroup 执行群组定时任务
@@ -193,6 +214,127 @@ func (s *GroupScheduler) executeGroupUpdate(groupID int64) {
 	}
 
 	logx.Infof("群组[%s]强制更新完成", group.Name)
+}
+
+// executeGroupWithProgress 执行群组检查任务（带进度跟踪）
+func (s *GroupScheduler) executeGroupWithProgress(groupID int64, taskID string) {
+	taskName := fmt.Sprintf("群组检查 #%d", groupID)
+
+	group, err := model.GetGroupByID(groupID)
+	if err != nil {
+		logx.Errorf("获取群组[%d]失败: %v", groupID, err)
+		s.updateProgress(taskID, 0, "获取群组失败", taskName, err.Error(), true)
+		return
+	}
+
+	taskName = fmt.Sprintf("群组检查: %s", group.Name)
+	s.updateProgress(taskID, 5, "开始检查群组", taskName, "正在获取匹配的容器", false)
+
+	if !group.Enabled {
+		s.updateProgress(taskID, 100, "群组已禁用", taskName, "跳过执行", true)
+		return
+	}
+
+	containers, err := s.getMatchedContainers(groupID)
+	if err != nil {
+		logx.Errorf("获取群组[%s]容器失败: %v", group.Name, err)
+		s.updateProgress(taskID, 0, "获取容器失败", taskName, err.Error(), true)
+		return
+	}
+
+	if len(containers) == 0 {
+		s.updateProgress(taskID, 100, "完成", taskName, "没有匹配的容器", true)
+		return
+	}
+
+	total := len(containers)
+	s.updateProgress(taskID, 10, fmt.Sprintf("找到 %d 个容器", total), taskName, "开始检查更新", false)
+
+	for i, container := range containers {
+		progress := 10 + (i+1)*80/total
+		s.updateProgress(taskID, progress, fmt.Sprintf("检查 %s (%d/%d)", container.Name, i+1, total), taskName, "", false)
+
+		if group.CheckUpdate {
+			if group.AutoUpdate {
+				s.checkAndUpdate(group, container)
+			} else {
+				s.checkOnly(group, container)
+			}
+		}
+	}
+
+	s.updateProgress(taskID, 100, "检查完成", taskName, fmt.Sprintf("已检查 %d 个容器", total), true)
+	logx.Infof("群组[%s]检查任务执行完成", group.Name)
+}
+
+// executeGroupUpdateWithProgress 强制执行群组更新（带进度跟踪）
+func (s *GroupScheduler) executeGroupUpdateWithProgress(groupID int64, taskID string) {
+	taskName := fmt.Sprintf("群组更新 #%d", groupID)
+
+	group, err := model.GetGroupByID(groupID)
+	if err != nil {
+		logx.Errorf("获取群组[%d]失败: %v", groupID, err)
+		s.updateProgress(taskID, 0, "获取群组失败", taskName, err.Error(), true)
+		return
+	}
+
+	taskName = fmt.Sprintf("群组更新: %s", group.Name)
+	s.updateProgress(taskID, 5, "开始更新群组", taskName, "正在获取匹配的容器", false)
+
+	containers, err := s.getMatchedContainers(groupID)
+	if err != nil {
+		logx.Errorf("获取群组[%s]容器失败: %v", group.Name, err)
+		s.updateProgress(taskID, 0, "获取容器失败", taskName, err.Error(), true)
+		return
+	}
+
+	if len(containers) == 0 {
+		s.updateProgress(taskID, 100, "完成", taskName, "没有匹配的容器", true)
+		return
+	}
+
+	total := len(containers)
+	updated := 0
+	failed := 0
+	skipped := 0
+
+	s.updateProgress(taskID, 10, fmt.Sprintf("找到 %d 个容器", total), taskName, "开始更新", false)
+
+	for i, container := range containers {
+		progress := 10 + (i+1)*80/total
+		s.updateProgress(taskID, progress, fmt.Sprintf("更新 %s (%d/%d)", container.Name, i+1, total), taskName, "", false)
+
+		executor := NewExecutor(s.dockerClient, s.hubImageInfo)
+		hasUpdate, err := executor.CheckUpdate(context.Background(), container)
+		if err != nil {
+			logx.Errorf("检查容器[%s]更新失败: %v", container.Name, err)
+			s.recordHistory(group.ID, container, "", "", model.UpdateStatusFailed, err.Error())
+			failed++
+			continue
+		}
+
+		if !hasUpdate {
+			skipped++
+			continue
+		}
+
+		oldImage := container.Image
+		result, err := executor.Update(context.Background(), container)
+		if err != nil {
+			logx.Errorf("容器[%s]更新失败: %v", container.Name, err)
+			s.recordHistory(group.ID, container, oldImage, "", model.UpdateStatusFailed, err.Error())
+			failed++
+			continue
+		}
+
+		logx.Infof("容器[%s]更新成功: %s -> %s", container.Name, oldImage, result.NewImage)
+		s.recordHistory(group.ID, container, oldImage, result.NewImage, model.UpdateStatusSuccess, "")
+		updated++
+	}
+
+	summary := fmt.Sprintf("更新: %d, 跳过: %d, 失败: %d", updated, skipped, failed)
+	s.updateProgress(taskID, 100, "更新完成", taskName, summary, true)
+	logx.Infof("群组[%s]强制更新完成: %s", group.Name, summary)
 }
 
 // getMatchedContainers 获取匹配群组的容器

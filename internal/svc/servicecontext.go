@@ -95,3 +95,25 @@ func (ctx *ServiceContext) GetAllTasks() []TaskProgress {
 	}
 	return tasks
 }
+
+// ProgressAdapter 适配器，实现 scheduler.TaskProgressUpdater 接口
+type ProgressAdapter struct {
+	svcCtx *ServiceContext
+}
+
+// NewProgressAdapter 创建进度适配器
+func NewProgressAdapter(ctx *ServiceContext) *ProgressAdapter {
+	return &ProgressAdapter{svcCtx: ctx}
+}
+
+// UpdateProgress 实现 scheduler.TaskProgressUpdater 接口
+func (a *ProgressAdapter) UpdateProgress(taskID string, percentage int, message string, name string, detailMsg string, isDone bool) {
+	a.svcCtx.UpdateProgress(taskID, TaskProgress{
+		TaskID:     taskID,
+		Percentage: percentage,
+		Message:    message,
+		Name:       name,
+		DetailMsg:  detailMsg,
+		IsDone:     isDone,
+	})
+}

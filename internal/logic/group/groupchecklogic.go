@@ -42,9 +42,10 @@ func (l *GroupCheckLogic) GroupCheck(req *types.GroupIdReq) (resp *types.Resp, e
 		return resp, err
 	}
 
-	// 触发检查（不强制更新）
+	// 触发检查（不强制更新），获取任务ID
+	var taskId string
 	if l.svcCtx.GroupScheduler != nil {
-		l.svcCtx.GroupScheduler.TriggerGroup(group.ID, false)
+		taskId = l.svcCtx.GroupScheduler.TriggerGroup(group.ID, false)
 	}
 
 	resp.Code = 200
@@ -52,6 +53,7 @@ func (l *GroupCheckLogic) GroupCheck(req *types.GroupIdReq) (resp *types.Resp, e
 	resp.Data = map[string]interface{}{
 		"groupId":   group.ID,
 		"groupName": group.Name,
+		"taskId":    taskId,
 	}
 	return resp, nil
 }

@@ -42,9 +42,10 @@ func (l *GroupUpdateActionLogic) GroupUpdateAction(req *types.GroupIdReq) (resp 
 		return resp, err
 	}
 
-	// 触发强制更新
+	// 触发强制更新，获取任务ID
+	var taskId string
 	if l.svcCtx.GroupScheduler != nil {
-		l.svcCtx.GroupScheduler.TriggerGroup(group.ID, true)
+		taskId = l.svcCtx.GroupScheduler.TriggerGroup(group.ID, true)
 	}
 
 	resp.Code = 200
@@ -52,6 +53,7 @@ func (l *GroupUpdateActionLogic) GroupUpdateAction(req *types.GroupIdReq) (resp 
 	resp.Data = map[string]interface{}{
 		"groupId":   group.ID,
 		"groupName": group.Name,
+		"taskId":    taskId,
 	}
 	return resp, nil
 }

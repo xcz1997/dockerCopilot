@@ -65,6 +65,8 @@ func main() {
 
 	// 启动群组调度器
 	if ctx.GroupScheduler != nil {
+		// 设置进度更新器，让群组更新操作能在任务列表中显示
+		ctx.GroupScheduler.SetProgressUpdater(svc.NewProgressAdapter(ctx))
 		if err := ctx.GroupScheduler.Start(); err != nil {
 			logx.Errorf("启动群组调度器失败: %v", err)
 		}
@@ -135,7 +137,7 @@ func RegisterHandlers(engine *rest.Server) {
 	}
 
 	// 注册 SPA 路由
-	spaRoutes := []string{"/manager", "/manager/containers", "/manager/images", "/manager/groups", "/manager/backups", "/manager/settings", "/manager/login"}
+	spaRoutes := []string{"/manager", "/manager/containers", "/manager/images", "/manager/groups", "/manager/backups", "/manager/settings", "/manager/login", "/manager/tasks", "/manager/projects"}
 	for _, path := range spaRoutes {
 		engine.AddRoute(rest.Route{Method: http.MethodGet, Path: path, Handler: spaHandler})
 	}
