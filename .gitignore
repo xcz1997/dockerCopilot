@@ -32,3 +32,4 @@ __pycache__/
 /logs/
 /dist/
 /frontend/node_modules/
+CLAUDE.md
