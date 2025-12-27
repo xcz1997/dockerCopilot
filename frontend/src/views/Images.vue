@@ -1,0 +1,331 @@
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useImagesStore } from '@/stores/images'
+
+const imagesStore = useImagesStore()
+
+const searchQuery = ref('')
+const filterType = ref('all')
+const showDeleteModal = ref(false)
+const selectedImage = ref(null)
+const forceDelete = ref(false)
+const deletingIds = ref(new Set())
+
+const filteredImages = computed(() => {
+  let result = imagesStore.images
+
+  // 搜索过滤
+  if (searchQuery.value) {
+    const query = searchQuery.value.toLowerCase()
+    result = result.filter(img =>
+      img.ImageName?.toLowerCase().includes(query) ||
+      img.ImageTag?.toLowerCase().includes(query)
+    )
+  }
+
+  // 类型过滤
+  if (filterType.value === 'used') {
+    result = result.filter(img => img.InUsed)
+  } else if (filterType.value === 'unused') {
+    result = result.filter(img => !img.InUsed)
+  }
+
+  return result
+})
+
+const stats = computed(() => {
+  const images = imagesStore.images
+  const totalSize = images.reduce((acc, img) => acc + (img.Size || 0), 0)
+  return {
+    total: images.length,
+    used: images.filter(img => img.InUsed).length,
+    unused: images.filter(img => !img.InUsed).length,
+    totalSize: formatSize(totalSize)
+  }
+})
+
+function formatSize(bytes) {
+  if (!bytes) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let i = 0
+  while (bytes >= 1024 && i < units.length - 1) {
+    bytes /= 1024
+    i++
+  }
+  return `${bytes.toFixed(1)} ${units[i]}`
+}
+
+function formatTime(timestamp) {
+  if (!timestamp) return '-'
+  const date = new Date(timestamp * 1000)
+  return date.toLocaleDateString('zh-CN')
+}
+
+function getImageFullName(image) {
+  if (image.ImageName && image.ImageTag) {
+    return `${image.ImageName}:${image.ImageTag}`
+  }
+  return image.Id?.substring(7, 19) || 'unknown'
+}
+
+function openDeleteModal(image) {
+  selectedImage.value = image
+  forceDelete.value = false
+  showDeleteModal.value = true
+}
+
+async function handleDelete() {
+  if (!selectedImage.value) return
+
+  const id = selectedImage.value.Id
+  deletingIds.value.add(id)
+
+  try {
+    const result = await imagesStore.removeImage(id, forceDelete.value)
+    if (result.success) {
+      showDeleteModal.value = false
+    } else {
+      alert(result.message || '删除失败')
+    }
+  } finally {
+    deletingIds.value.delete(id)
+  }
+}
+
+onMounted(() => {
+  imagesStore.fetchImages()
+})
+</script>
+
+<template>
+  <div class="space-y-6">
+    <!-- 统计卡片 -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="card card-hover p-4">
+        <div class="flex items-center gap-3">
+          <div class="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+            <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ stats.total }}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">总镜像数</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-hover p-4">
+        <div class="flex items-center gap-3">
+          <div class="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
+            <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ stats.used }}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">使用中</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-hover p-4">
+        <div class="flex items-center gap-3">
+          <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+            <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-gray-600 dark:text-gray-400">{{ stats.unused }}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">未使用</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-hover p-4">
+        <div class="flex items-center gap-3">
+          <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+            <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ stats.totalSize }}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">总大小</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 搜索和过滤栏 -->
+    <div class="card p-4">
+      <div class="flex flex-col sm:flex-row gap-4">
+        <!-- 搜索框 -->
+        <div class="relative flex-1">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="搜索镜像名称或标签..."
+            class="input pl-10"
+          />
+        </div>
+
+        <!-- 类型过滤 -->
+        <div class="flex gap-2">
+          <button
+            v-for="type in [
+              { value: 'all', label: '全部' },
+              { value: 'used', label: '使用中' },
+              { value: 'unused', label: '未使用' }
+            ]"
+            :key="type.value"
+            @click="filterType = type.value"
+            :class="[
+              'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+              filterType === type.value
+                ? 'bg-primary-600 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            ]"
+          >
+            {{ type.label }}
+          </button>
+        </div>
+
+        <!-- 刷新按钮 -->
+        <button
+          @click="imagesStore.fetchImages()"
+          :disabled="imagesStore.loading"
+          class="btn btn-secondary"
+        >
+          <svg :class="['w-5 h-5', imagesStore.loading && 'animate-spin']" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          刷新
+        </button>
+      </div>
+    </div>
+
+    <!-- 镜像列表 -->
+    <div v-if="imagesStore.loading && imagesStore.images.length === 0" class="flex justify-center py-12">
+      <svg class="animate-spin h-8 w-8 text-primary-600" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+      </svg>
+    </div>
+
+    <div v-else-if="imagesStore.error" class="card p-8 text-center">
+      <svg class="w-12 h-12 mx-auto text-red-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <p class="text-gray-600 dark:text-gray-400">{{ imagesStore.error }}</p>
+      <button @click="imagesStore.fetchImages()" class="btn btn-primary mt-4">重试</button>
+    </div>
+
+    <div v-else-if="filteredImages.length === 0" class="card p-8 text-center">
+      <svg class="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+      <p class="text-gray-500 dark:text-gray-400">没有找到镜像</p>
+    </div>
+
+    <div v-else class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div
+        v-for="image in filteredImages"
+        :key="image.Id"
+        class="card card-hover p-5 animate-fade-in"
+      >
+        <div class="flex flex-col h-full">
+          <!-- 镜像信息 -->
+          <div class="flex items-start gap-3 mb-4">
+            <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex-shrink-0">
+              <svg class="w-6 h-6 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h3 class="font-semibold text-gray-900 dark:text-white truncate" :title="getImageFullName(image)">
+                {{ image.ImageName || 'none' }}
+              </h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400">{{ image.ImageTag || 'none' }}</p>
+            </div>
+            <span :class="['badge', image.InUsed ? 'badge-success' : 'badge-gray']">
+              {{ image.InUsed ? '使用中' : '未使用' }}
+            </span>
+          </div>
+
+          <!-- 详细信息 -->
+          <div class="flex-1 space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="text-gray-500 dark:text-gray-400">大小</span>
+              <span class="font-medium text-gray-900 dark:text-white">{{ image.SizeFormat || formatSize(image.Size) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500 dark:text-gray-400">创建时间</span>
+              <span class="font-medium text-gray-900 dark:text-white">{{ formatTime(image.Created) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500 dark:text-gray-400">ID</span>
+              <span class="font-mono text-xs text-gray-600 dark:text-gray-400">{{ image.Id?.substring(7, 19) }}</span>
+            </div>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+            <button
+              @click="openDeleteModal(image)"
+              :disabled="deletingIds.has(image.Id)"
+              class="btn btn-sm btn-ghost text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 w-full"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              删除镜像
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+      <div class="card w-full max-w-md p-6 animate-scale-in" @click.stop>
+        <div class="flex items-center gap-3 mb-4">
+          <div class="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
+            <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">删除镜像</h3>
+        </div>
+
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+          确定要删除镜像 <strong class="text-gray-900 dark:text-white">{{ getImageFullName(selectedImage) }}</strong> 吗？
+        </p>
+
+        <div v-if="selectedImage?.InUsed" class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
+          <p class="text-sm text-amber-800 dark:text-amber-300">
+            此镜像正在被容器使用，需要强制删除。
+          </p>
+        </div>
+
+        <label class="flex items-center gap-2 mb-4">
+          <input
+            type="checkbox"
+            v-model="forceDelete"
+            class="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+          <span class="text-sm text-gray-600 dark:text-gray-400">强制删除</span>
+        </label>
+
+        <div class="flex justify-end gap-3">
+          <button @click="showDeleteModal = false" class="btn btn-secondary">取消</button>
+          <button @click="handleDelete" class="btn btn-danger">确认删除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>

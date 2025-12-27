@@ -4,6 +4,12 @@ import (
 	"embed"
 	"flag"
 	"fmt"
+	"io/fs"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+
 	"github.com/onlyLTY/dockerCopilot/internal/config"
 	"github.com/onlyLTY/dockerCopilot/internal/handler"
 	"github.com/onlyLTY/dockerCopilot/internal/svc"
@@ -16,10 +22,6 @@ import (
 	"github.com/zeromicro/x/errors"
 	xhttp "github.com/zeromicro/x/http"
 	"go/types"
-	"io/fs"
-	"log"
-	"net/http"
-	"os"
 )
 
 //go:embed front/*
@@ -110,8 +112,19 @@ func RegisterHandlers(engine *rest.Server) {
 		log.Fatal(err)
 	}
 
-	frontFileServer := http.StripPrefix("/manager", http.FileServer(http.FS(frontFS)))
+	// 读取 index.html 用于 SPA 回退
+	indexHTML, err := fs.ReadFile(frontFS, "index.html")
+	if err != nil {
+		log.Fatal(err)
+	}
 
+	// SPA 回退处理器：返回 index.html
+	spaHandler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(indexHTML)
+	}
+
+	// 静态资源处理器
 	assetsHandler := http.FileServer(http.FS(frontFS))
 
 	engine.AddRoutes(
@@ -119,23 +132,21 @@ func RegisterHandlers(engine *rest.Server) {
 			{
 				Method: http.MethodGet,
 				Path:   "/manager",
-				Handler: func(w http.ResponseWriter, r *http.Request) {
-					frontFileServer.ServeHTTP(w, r)
-				},
-			},
-			{
-				Method: http.MethodGet,
-				Path:   "/manager/:path",
-				Handler: func(w http.ResponseWriter, r *http.Request) {
-					frontFileServer.ServeHTTP(w, r)
-				},
+				Handler: spaHandler,
 			},
 			{
 				Method: http.MethodGet,
 				Path:   "/manager/assets/:path",
 				Handler: func(w http.ResponseWriter, r *http.Request) {
-					frontFileServer.ServeHTTP(w, r)
+					// 去掉 /manager 前缀
+					r.URL.Path = strings.TrimPrefix(r.URL.Path, "/manager")
+					assetsHandler.ServeHTTP(w, r)
 				},
+			},
+			{
+				Method: http.MethodGet,
+				Path:   "/manager/:path",
+				Handler: spaHandler, // SPA 路由回退到 index.html
 			},
 			{
 				Method: http.MethodGet,
