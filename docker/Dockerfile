@@ -1,24 +1,38 @@
-# 使用 Alpine 作为基础镜像
+# Stage 1: 构建前端
+FROM node:20-alpine AS frontend-builder
+WORKDIR /build/frontend
+COPY frontend/package*.json ./
+RUN npm install --registry=https://registry.npmmirror.com
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: 构建后端
+FROM golang:1.23-alpine AS backend-builder
+WORKDIR /src
+ENV GOPROXY=https://goproxy.cn,direct
+ENV CGO_ENABLED=0
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+COPY --from=frontend-builder /build/front ./front
+RUN go build -ldflags "-s -w" -o dockerCopilot .
+
+# Stage 3: 运行时镜像
 FROM alpine
-LABEL authors="onlyLTY"
 WORKDIR /app
 
-ARG TARGETPLATFORM
-
-COPY dc-back/dist/$TARGETPLATFORM/dockerCopilot ./dockerCopilot
-COPY dc-back/etc/. ./etc
+COPY --from=backend-builder /src/dockerCopilot ./dockerCopilot
+COPY etc/. ./etc
 COPY start.sh ./start.sh
 
 RUN apk add --no-cache tzdata \
     && chmod +x start.sh \
     && chmod +x dockerCopilot
 
-# 设置环境变量
 ENV secretKey="" \
     DOCKER_HOST="unix:///var/run/docker.sock" \
     BACKUP_DIR="/data/backups" \
     TZ="Asia/Shanghai"
 
 VOLUME ["/data"]
-# 设置启动命令
 CMD ["./start.sh"]
