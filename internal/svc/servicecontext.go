@@ -85,3 +85,13 @@ func (ctx *ServiceContext) GetProgress(taskID string) (TaskProgress, bool) {
 	progress, ok := ctx.ProgressStore[taskID]
 	return progress, ok
 }
+
+func (ctx *ServiceContext) GetAllTasks() []TaskProgress {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+	tasks := make([]TaskProgress, 0, len(ctx.ProgressStore))
+	for _, task := range ctx.ProgressStore {
+		tasks = append(tasks, task)
+	}
+	return tasks
+}

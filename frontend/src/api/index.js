@@ -103,6 +103,14 @@ const api = {
     getBark: () => instance.get('/settings/bark'),
     saveBark: (data) => instance.post('/settings/bark', data, { headers: { 'Content-Type': 'application/json' } }),
     testBark: (data) => instance.post('/settings/bark/test', data, { headers: { 'Content-Type': 'application/json' } })
+  },
+
+  tasks: {
+    list: (status = 'current') => instance.get('/tasks', { params: { status } })
+  },
+
+  projects: {
+    list: () => instance.get('/projects')
   }
 }
 

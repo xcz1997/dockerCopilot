@@ -43,6 +43,16 @@ const router = createRouter({
           path: 'groups',
           name: 'groups',
           component: () => import('@/views/Groups.vue')
+        },
+        {
+          path: 'tasks',
+          name: 'tasks',
+          component: () => import('@/views/Tasks.vue')
+        },
+        {
+          path: 'projects',
+          name: 'projects',
+          component: () => import('@/views/Projects.vue')
         }
       ]
     },

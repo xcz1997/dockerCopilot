@@ -97,6 +97,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/containers",
 				Handler: container.ContainersListHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/projects",
+				Handler: container.ProjectsListHandler(serverCtx),
+			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
@@ -130,6 +135,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodGet,
 				Path:    "/progress/:taskid",
 				Handler: progress.GetProgressHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/tasks",
+				Handler: progress.ListTasksHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
