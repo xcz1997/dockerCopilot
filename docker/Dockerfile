@@ -9,8 +9,10 @@ RUN npm run build
 # Stage 2: 构建后端
 FROM --platform=linux/amd64 golang:1.23-alpine AS backend-builder
 WORKDIR /src
+# 安装 CGO 依赖（go-sqlite3 需要）
+RUN apk add --no-cache gcc musl-dev sqlite-dev
 ENV GOPROXY=https://goproxy.cn,direct
-ENV CGO_ENABLED=0
+ENV CGO_ENABLED=1
 ENV GOOS=linux
 ENV GOARCH=amd64
 COPY go.mod go.sum ./
@@ -27,7 +29,7 @@ COPY --from=backend-builder /src/dockerCopilot ./dockerCopilot
 COPY etc/. ./etc
 COPY start.sh ./start.sh
 
-RUN apk add --no-cache tzdata \
+RUN apk add --no-cache tzdata sqlite-libs \
     && chmod +x start.sh \
     && chmod +x dockerCopilot
 
