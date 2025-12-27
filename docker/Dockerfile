@@ -11,6 +11,8 @@ FROM golang:1.23-alpine AS backend-builder
 WORKDIR /src
 ENV GOPROXY=https://goproxy.cn,direct
 ENV CGO_ENABLED=0
+ENV GOOS=linux
+ENV GOARCH=amd64
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
