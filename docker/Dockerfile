@@ -1,5 +1,5 @@
 # Stage 1: 构建前端
-FROM node:20-alpine AS frontend-builder
+FROM --platform=linux/amd64 node:20-alpine AS frontend-builder
 WORKDIR /build/frontend
 COPY frontend/package*.json ./
 RUN npm install --registry=https://registry.npmmirror.com
@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: 构建后端
-FROM golang:1.23-alpine AS backend-builder
+FROM --platform=linux/amd64 golang:1.23-alpine AS backend-builder
 WORKDIR /src
 ENV GOPROXY=https://goproxy.cn,direct
 ENV CGO_ENABLED=0
@@ -20,7 +20,7 @@ COPY --from=frontend-builder /build/front ./front
 RUN go build -ldflags "-s -w" -o dockerCopilot .
 
 # Stage 3: 运行时镜像
-FROM alpine
+FROM --platform=linux/amd64 alpine
 WORKDIR /app
 
 COPY --from=backend-builder /src/dockerCopilot ./dockerCopilot
