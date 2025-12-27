@@ -21,15 +21,15 @@ const filteredContainers = computed(() => {
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(c =>
-      c.Names?.[0]?.toLowerCase().includes(query) ||
-      c.Image?.toLowerCase().includes(query)
+      c.name?.toLowerCase().includes(query) ||
+      c.usingImage?.toLowerCase().includes(query)
     )
   }
 
   // 状态过滤
   if (filterStatus.value !== 'all') {
     result = result.filter(c => {
-      const state = c.State?.toLowerCase()
+      const state = c.status?.toLowerCase()
       if (filterStatus.value === 'running') return state === 'running'
       if (filterStatus.value === 'stopped') return state === 'exited' || state === 'created'
       return true
@@ -43,15 +43,11 @@ const stats = computed(() => {
   const containers = containersStore.containers
   return {
     total: containers.length,
-    running: containers.filter(c => c.State?.toLowerCase() === 'running').length,
-    stopped: containers.filter(c => c.State?.toLowerCase() === 'exited' || c.State?.toLowerCase() === 'created').length,
-    needsUpdate: containers.filter(c => c.Update).length
+    running: containers.filter(c => c.status?.toLowerCase() === 'running').length,
+    stopped: containers.filter(c => c.status?.toLowerCase() === 'exited' || c.status?.toLowerCase() === 'created').length,
+    needsUpdate: containers.filter(c => c.haveUpdate).length
   }
 })
-
-function getContainerName(container) {
-  return container.Names?.[0]?.replace(/^\//, '') || 'unknown'
-}
 
 function getStatusBadge(state) {
   const s = state?.toLowerCase()
@@ -63,23 +59,8 @@ function getStatusBadge(state) {
   return { class: 'badge-gray', text: state || '未知' }
 }
 
-function formatTime(timestamp) {
-  if (!timestamp) return '-'
-  const date = new Date(timestamp * 1000)
-  return date.toLocaleString('zh-CN')
-}
-
-function formatPorts(ports) {
-  if (!ports || ports.length === 0) return '-'
-  return ports
-    .filter(p => p.PublicPort)
-    .map(p => `${p.PublicPort}:${p.PrivatePort}`)
-    .slice(0, 3)
-    .join(', ') || '-'
-}
-
 async function handleAction(container, action) {
-  const id = container.Id
+  const id = container.id
   operatingIds.value.add(id)
 
   try {
@@ -105,14 +86,14 @@ async function handleAction(container, action) {
 
 function openRenameModal(container) {
   selectedContainer.value = container
-  newContainerName.value = getContainerName(container)
+  newContainerName.value = container.name || ''
   showRenameModal.value = true
 }
 
 async function handleRename() {
   if (!newContainerName.value.trim()) return
 
-  const id = selectedContainer.value.Id
+  const id = selectedContainer.value.id
   operatingIds.value.add(id)
 
   try {
@@ -135,14 +116,14 @@ function openUpdateModal(container) {
 
 async function handleUpdate() {
   const container = selectedContainer.value
-  const id = container.Id
+  const id = container.id
   operatingIds.value.add(id)
 
   try {
     const result = await containersStore.updateContainer(
       id,
-      container.Image,
-      getContainerName(container)
+      container.usingImage,
+      container.name
     )
 
     if (result.success && result.data?.taskId) {
@@ -324,7 +305,7 @@ onMounted(() => {
     <div v-else class="grid gap-4">
       <div
         v-for="container in filteredContainers"
-        :key="container.Id"
+        :key="container.id"
         class="card card-hover p-5 animate-fade-in"
       >
         <div class="flex flex-col lg:flex-row lg:items-center gap-4">
@@ -335,19 +316,19 @@ onMounted(() => {
               <span
                 :class="[
                   'w-3 h-3 rounded-full flex-shrink-0',
-                  container.State?.toLowerCase() === 'running' ? 'bg-emerald-500 animate-pulse-soft' : 'bg-gray-400'
+                  container.status?.toLowerCase() === 'running' ? 'bg-emerald-500 animate-pulse-soft' : 'bg-gray-400'
                 ]"
               ></span>
               <!-- 容器名 -->
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white truncate">
-                {{ getContainerName(container) }}
+                {{ container.name }}
               </h3>
               <!-- 状态标签 -->
-              <span :class="['badge', getStatusBadge(container.State).class]">
-                {{ getStatusBadge(container.State).text }}
+              <span :class="['badge', getStatusBadge(container.status).class]">
+                {{ getStatusBadge(container.status).text }}
               </span>
               <!-- 更新标签 -->
-              <span v-if="container.Update" class="badge badge-warning">
+              <span v-if="container.haveUpdate" class="badge badge-warning">
                 有更新
               </span>
             </div>
@@ -357,29 +338,29 @@ onMounted(() => {
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <span class="truncate max-w-[200px]">{{ container.Image }}</span>
+                <span class="truncate max-w-[200px]">{{ container.usingImage }}</span>
               </div>
               <div class="flex items-center gap-1.5">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span>{{ formatTime(container.Created) }}</span>
+                <span>{{ container.createTime || '-' }}</span>
               </div>
               <div class="flex items-center gap-1.5">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                <span>{{ formatPorts(container.Ports) }}</span>
+                <span>{{ container.runningTime || '-' }}</span>
               </div>
             </div>
           </div>
 
           <!-- 操作按钮 -->
           <div class="flex items-center gap-2 flex-shrink-0">
-            <template v-if="container.State?.toLowerCase() === 'running'">
+            <template v-if="container.status?.toLowerCase() === 'running'">
               <button
                 @click="handleAction(container, 'stop')"
-                :disabled="operatingIds.has(container.Id)"
+                :disabled="operatingIds.has(container.id)"
                 class="btn btn-sm btn-ghost text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                 title="停止"
               >
@@ -391,7 +372,7 @@ onMounted(() => {
               </button>
               <button
                 @click="handleAction(container, 'restart')"
-                :disabled="operatingIds.has(container.Id)"
+                :disabled="operatingIds.has(container.id)"
                 class="btn btn-sm btn-ghost text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
                 title="重启"
               >
@@ -404,7 +385,7 @@ onMounted(() => {
             <template v-else>
               <button
                 @click="handleAction(container, 'start')"
-                :disabled="operatingIds.has(container.Id)"
+                :disabled="operatingIds.has(container.id)"
                 class="btn btn-sm btn-success"
                 title="启动"
               >
@@ -418,7 +399,7 @@ onMounted(() => {
 
             <button
               @click="openRenameModal(container)"
-              :disabled="operatingIds.has(container.Id)"
+              :disabled="operatingIds.has(container.id)"
               class="btn btn-sm btn-ghost"
               title="重命名"
             >
@@ -428,9 +409,9 @@ onMounted(() => {
             </button>
 
             <button
-              v-if="container.Update"
+              v-if="container.haveUpdate"
               @click="openUpdateModal(container)"
-              :disabled="operatingIds.has(container.Id)"
+              :disabled="operatingIds.has(container.id)"
               class="btn btn-sm btn-warning"
               title="更新"
             >
@@ -467,10 +448,10 @@ onMounted(() => {
       <div class="card w-full max-w-md p-6 animate-scale-in" @click.stop>
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">更新容器</h3>
         <p class="text-gray-600 dark:text-gray-400 mb-4">
-          确定要更新容器 <strong>{{ getContainerName(selectedContainer) }}</strong> 吗？
+          确定要更新容器 <strong>{{ selectedContainer?.name }}</strong> 吗？
         </p>
         <p class="text-sm text-gray-500 dark:text-gray-500 mb-4">
-          镜像: {{ selectedContainer?.Image }}
+          镜像: {{ selectedContainer?.usingImage }}
         </p>
 
         <!-- 进度显示 -->

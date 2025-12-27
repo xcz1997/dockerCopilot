@@ -46,6 +46,7 @@ func (l *ContainersListLogic) ContainersList() (resp *types.Resp, err error) {
 		resp.Data = map[string]interface{}{}
 		return resp, err
 	}
+	resp.Code = 200
 	resp.Msg = "success"
 	var containerInfoList []Info
 	list = utiles.CheckImageUpdate(l.svcCtx, list)
