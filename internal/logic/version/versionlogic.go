@@ -29,35 +29,45 @@ func (l *VersionLogic) Version(req *types.VersionReq) (resp *types.Resp, err err
 	if req.Type == "local" {
 		resp.Code = 200
 		resp.Msg = "success"
-		resp.Data = map[string]string{
+		resp.Data = map[string]interface{}{
 			"version":   config.Version,
 			"buildDate": config.BuildDate,
+			"isDocker":  utiles.IsRunningInDocker(),
 		}
 		return resp, nil
 	} else if req.Type == "remote" {
-		remoteVersion, err := utiles.GetRemoteVersion()
+		versionInfo, err := utiles.GetVersionInfo()
 		if err != nil {
 			resp.Code = 500
-			resp.Msg = "获取版本错误" + err.Error()
-			resp.Data = map[string]string{
-				"remoteVersion": config.Version,
+			resp.Msg = "获取版本错误: " + err.Error()
+			resp.Data = map[string]interface{}{
+				"localVersion":  config.Version,
+				"remoteVersion": "获取失败",
+				"hasUpdate":     false,
+				"isDocker":      utiles.IsRunningInDocker(),
+				"canAutoUpdate": false,
+				"updateMessage": "获取远程版本失败",
 			}
 			return resp, err
-		} else if remoteVersion != config.Version {
+		}
+
+		if versionInfo.HasUpdate {
 			resp.Code = 200
 			resp.Msg = "程序有更新"
-			resp.Data = map[string]string{
-				"remoteVersion": remoteVersion,
-			}
-			return resp, nil
 		} else {
 			resp.Code = 200
 			resp.Msg = "程序无更新"
-			resp.Data = map[string]string{
-				"remoteVersion": remoteVersion,
-			}
-			return resp, nil
 		}
+
+		resp.Data = map[string]interface{}{
+			"localVersion":  versionInfo.LocalVersion,
+			"remoteVersion": versionInfo.RemoteVersion,
+			"hasUpdate":     versionInfo.HasUpdate,
+			"isDocker":      versionInfo.IsDocker,
+			"canAutoUpdate": versionInfo.CanAutoUpdate,
+			"updateMessage": versionInfo.UpdateMessage,
+		}
+		return resp, nil
 
 	} else {
 		resp.Code = 400

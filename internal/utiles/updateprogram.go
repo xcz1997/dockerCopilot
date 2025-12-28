@@ -13,12 +13,26 @@ import (
 	"strings"
 )
 
+// UpdateProgramResult 更新结果
+type UpdateProgramResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
 func UpdateProgram(ctx *svc.ServiceContext) error {
+	// 检测是否在 Docker 容器中运行
+	if IsRunningInDocker() {
+		logx.Info("检测到 Docker 环境，无法自动更新程序。请拉取最新镜像: docker pull muuua/docker-copilot:latest")
+		return fmt.Errorf("Docker 环境不支持自动更新，请拉取最新镜像更新")
+	}
+
 	githubProxy := os.Getenv("githubProxy")
 	if githubProxy != "" {
 		githubProxy = strings.TrimRight(githubProxy, "/") + "/"
 	}
-	versionURL := githubProxy + "https://raw.githubusercontent.com/onlyLTY/dockerCopilot/UGREEN/version"
+
+	// 从 latest 分支获取版本号
+	versionURL := githubProxy + "https://raw.githubusercontent.com/xcz1997/dockerCopilot/latest/version"
 	releaseBaseURL := githubProxy + "https://github.com/xcz1997/dockerCopilot/releases/download"
 	logx.Infof("versionURL: %s", versionURL)
 	resp, err := http.Get(versionURL)

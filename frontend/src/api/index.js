@@ -68,7 +68,9 @@ const api = {
   },
 
   version: {
-    get: () => instance.get('/version'),
+    getLocal: () => instance.get('/version', { params: { type: 'local' } }),
+    getRemote: () => instance.get('/version', { params: { type: 'remote' } }),
+    get: () => instance.get('/version', { params: { type: 'remote' } }),
     update: () => instance.put('/program')
   },
 

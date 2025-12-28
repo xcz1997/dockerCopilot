@@ -120,7 +120,7 @@ async function handleLogin() {
         <!-- 底部信息 -->
         <div class="mt-8 pt-6 border-t border-white/10 text-center">
           <p class="text-gray-500 text-xs">
-            <a href="https://github.com/onlyLTY/dockerCopilot" target="_blank" rel="noopener"
+            <a href="https://github.com/xcz1997/dockerCopilot" target="_blank" rel="noopener"
                class="text-docker-blue hover:text-docker-blue/80 transition-colors">
               Docker Copilot
             </a>

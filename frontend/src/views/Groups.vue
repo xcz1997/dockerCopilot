@@ -54,6 +54,9 @@ const previewLoading = ref(false)
 // 项目列表（用于 project 类型群组的手动分配）
 const projectsList = ref([])
 
+// 镜像列表（用于 image 类型群组的手动分配）
+const imagesList = ref([])
+
 // 手动分配筛选关键字
 const assignSearchQuery = ref('')
 
@@ -292,6 +295,15 @@ async function openAssignModal(group) {
     } catch (e) {
       console.error('获取项目列表失败:', e)
     }
+  } else if (group.groupType === 'image') {
+    try {
+      const response = await api.images.list()
+      if (response.code === 200) {
+        imagesList.value = response.data || []
+      }
+    } catch (e) {
+      console.error('获取镜像列表失败:', e)
+    }
   }
 
   showAssignModal.value = true
@@ -349,8 +361,25 @@ const availableItems = computed(() => {
         id: p.name,
         name: p.name,
         image: `${p.running}/${p.total} 运行中`,
-        isProject: true
+        itemType: 'project'
       }))
+  } else if (groupType === 'image') {
+    // 镜像类型：显示镜像列表
+    items = imagesList.value
+      .filter(img => !assignedIds.has(img.id || img.Id))
+      .map(img => {
+        const imageId = img.id || img.Id || ''
+        const imageName = img.imageName || img.RepoTags?.[0] || imageId.substring(0, 12)
+        const imageTag = img.imageTag || ''
+        const displayName = imageTag && imageName ? `${imageName}:${imageTag}` : imageName
+        const sizeStr = img.size ? `${(img.size / 1024 / 1024).toFixed(1)} MB` : ''
+        return {
+          id: imageId,
+          name: displayName,
+          image: sizeStr || imageId.substring(7, 19),
+          itemType: 'image'
+        }
+      })
   } else {
     // 容器类型：显示容器列表
     items = containersStore.containers
@@ -359,7 +388,7 @@ const availableItems = computed(() => {
         id: c.id,
         name: c.name || c.Names?.[0]?.replace(/^\//, '') || 'unknown',
         image: c.usingImage || c.Image,
-        isProject: false
+        itemType: 'container'
       }))
   }
 
@@ -715,16 +744,16 @@ const availableContainers = availableItems
 
     <!-- 手动分配弹窗 -->
     <div v-if="showAssignModal && selectedGroup" class="modal-overlay" @click.self="showAssignModal = false">
-      <div class="modal-content max-w-2xl">
+      <div class="modal-content max-w-4xl">
         <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-          手动分配{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }} - {{ selectedGroup.name }}
+          手动分配{{ selectedGroup.groupType === 'project' ? '项目' : selectedGroup.groupType === 'image' ? '镜像' : '容器' }} - {{ selectedGroup.name }}
         </h3>
 
         <!-- 已分配项 -->
         <div class="mb-4">
           <div class="flex items-center justify-between mb-2">
             <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
-              已分配{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }}
+              已分配{{ selectedGroup.groupType === 'project' ? '项目' : selectedGroup.groupType === 'image' ? '镜像' : '容器' }}
               <span v-if="groupsStore.currentGroup?.containers?.length" class="text-gray-500 dark:text-gray-400 font-normal">
                 ({{ groupsStore.currentGroup.containers.length }})
               </span>
@@ -733,7 +762,7 @@ const availableContainers = availableItems
           <div v-if="groupsStore.currentGroup?.containers?.length" class="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
             <div v-for="c in groupsStore.currentGroup.containers" :key="c.id"
               class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-full text-sm">
-              <span class="text-gray-900 dark:text-white truncate max-w-[150px]" :title="c.containerName">{{ c.containerName }}</span>
+              <span class="text-gray-900 dark:text-white truncate max-w-[200px]" :title="c.containerName">{{ c.containerName }}</span>
               <button @click="unassignContainer(c.id)" class="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -750,7 +779,7 @@ const availableContainers = availableItems
         <div class="border-t border-gray-200 dark:border-gray-600 pt-4">
           <div class="flex items-center justify-between mb-3">
             <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
-              可分配{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }}
+              可分配{{ selectedGroup.groupType === 'project' ? '项目' : selectedGroup.groupType === 'image' ? '镜像' : '容器' }}
             </h4>
             <!-- 搜索框 -->
             <div class="relative">
@@ -788,7 +817,7 @@ const availableContainers = availableItems
             没有匹配 "{{ assignSearchQuery }}" 的结果
           </p>
           <p v-else class="text-sm text-gray-500 dark:text-gray-400">
-            没有可分配的{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }}
+            没有可分配的{{ selectedGroup.groupType === 'project' ? '项目' : selectedGroup.groupType === 'image' ? '镜像' : '容器' }}
           </p>
         </div>
 

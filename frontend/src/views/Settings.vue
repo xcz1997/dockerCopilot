@@ -5,6 +5,7 @@ import api from '@/api'
 const version = ref(null)
 const loading = ref(true)
 const updating = ref(false)
+const checkingUpdate = ref(false)
 
 // Bark 配置
 const barkConfig = ref({
@@ -27,6 +28,20 @@ async function fetchVersion() {
     console.error('获取版本失败:', e)
   } finally {
     loading.value = false
+  }
+}
+
+async function checkForUpdate() {
+  checkingUpdate.value = true
+  try {
+    const response = await api.version.getRemote()
+    if (response.code === 200) {
+      version.value = response.data
+    }
+  } catch (e) {
+    console.error('检查更新失败:', e)
+  } finally {
+    checkingUpdate.value = false
   }
 }
 
@@ -89,6 +104,12 @@ async function testBark() {
 }
 
 async function handleUpdate() {
+  // Docker 环境检查
+  if (version.value?.isDocker) {
+    alert('Docker 环境不支持自动更新。\n\n请手动更新镜像：\ndocker pull muuua/docker-copilot:latest\n\n然后重新创建容器。')
+    return
+  }
+
   if (!confirm('确定要更新程序吗？更新后程序将自动重启。')) return
 
   updating.value = true
@@ -138,10 +159,78 @@ onMounted(() => {
             加载版本信息...
           </div>
 
-          <div v-else-if="version" class="space-y-2">
-            <div class="flex items-center gap-2">
-              <span class="badge badge-info">v{{ version.version }}</span>
-              <span class="text-sm text-gray-500 dark:text-gray-400">{{ version.build_date }}</span>
+          <div v-else-if="version" class="space-y-3">
+            <!-- 当前版本信息 -->
+            <div class="flex items-center flex-wrap gap-2">
+              <span class="badge badge-info">v{{ version.localVersion || version.version }}</span>
+              <span v-if="version.isDocker" class="badge badge-secondary">
+                <svg class="w-3 h-3 mr-1" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13.983 11.078h2.119a.186.186 0 00.186-.186V9.006a.186.186 0 00-.186-.186h-2.119a.186.186 0 00-.186.186v1.886c0 .103.083.186.186.186z"/>
+                </svg>
+                Docker
+              </span>
+              <span v-if="version.buildDate" class="text-sm text-gray-500 dark:text-gray-400">{{ version.buildDate }}</span>
+            </div>
+
+            <!-- 更新状态 -->
+            <div v-if="version.hasUpdate" class="flex items-start gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+              <svg class="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div class="flex-1">
+                <p class="text-sm font-medium text-orange-700 dark:text-orange-300">
+                  发现新版本 v{{ version.remoteVersion }}
+                </p>
+                <p class="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                  {{ version.updateMessage }}
+                </p>
+              </div>
+            </div>
+
+            <div v-else-if="version.remoteVersion" class="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              当前已是最新版本
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="flex flex-wrap gap-2 pt-2">
+              <button
+                @click="checkForUpdate"
+                :disabled="checkingUpdate"
+                class="btn btn-secondary btn-sm"
+              >
+                <svg v-if="checkingUpdate" class="animate-spin w-4 h-4 mr-1" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                {{ checkingUpdate ? '检查中...' : '检查更新' }}
+              </button>
+
+              <button
+                v-if="version.hasUpdate && version.canAutoUpdate"
+                @click="handleUpdate"
+                :disabled="updating"
+                class="btn btn-primary btn-sm"
+              >
+                <svg v-if="updating" class="animate-spin w-4 h-4 mr-1" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                {{ updating ? '更新中...' : '立即更新' }}
+              </button>
+
+              <button
+                v-else-if="version.hasUpdate && version.isDocker"
+                @click="handleUpdate"
+                class="btn btn-secondary btn-sm"
+              >
+                <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                查看更新方法
+              </button>
             </div>
           </div>
         </div>
@@ -334,7 +423,7 @@ onMounted(() => {
       <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">相关链接</h3>
       <div class="space-y-3">
         <a
-          href="https://github.com/onlyLTY/dockerCopilot"
+          href="https://github.com/xcz1997/dockerCopilot"
           target="_blank"
           rel="noopener"
           class="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -356,8 +445,8 @@ onMounted(() => {
     <!-- 版权信息 -->
     <div class="text-center text-sm text-gray-500 dark:text-gray-400 py-4">
       <p>
-        Backend by <a href="https://github.com/onlyLTY" target="_blank" rel="noopener" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">onlyLTY</a>
-        · Frontend by <a href="https://github.com/xcz1997" target="_blank" rel="noopener" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">xcz1997</a>
+        Made by <a href="https://github.com/xcz1997" target="_blank" rel="noopener" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">xcz1997</a>
+        · Special thanks to <a href="https://github.com/onlyLTY" target="_blank" rel="noopener" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">onlyLTY</a>
       </p>
     </div>
   </div>
