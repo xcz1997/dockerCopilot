@@ -721,23 +721,28 @@ const availableContainers = availableItems
         </h3>
 
         <!-- 已分配项 -->
-        <div class="mb-6">
-          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            已分配{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }}
-          </h4>
-          <div v-if="groupsStore.currentGroup?.containers?.length" class="space-y-2">
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              已分配{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }}
+              <span v-if="groupsStore.currentGroup?.containers?.length" class="text-gray-500 dark:text-gray-400 font-normal">
+                ({{ groupsStore.currentGroup.containers.length }})
+              </span>
+            </h4>
+          </div>
+          <div v-if="groupsStore.currentGroup?.containers?.length" class="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
             <div v-for="c in groupsStore.currentGroup.containers" :key="c.id"
-              class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span class="text-sm text-gray-900 dark:text-white">{{ c.containerName }}</span>
-              <button @click="unassignContainer(c.id)" class="text-red-600 hover:text-red-700">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-full text-sm">
+              <span class="text-gray-900 dark:text-white truncate max-w-[150px]" :title="c.containerName">{{ c.containerName }}</span>
+              <button @click="unassignContainer(c.id)" class="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
           </div>
-          <p v-else class="text-sm text-gray-500 dark:text-gray-400">
-            暂无手动分配的{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }}
+          <p v-else class="text-sm text-gray-500 dark:text-gray-400 italic">
+            暂无手动分配
           </p>
         </div>
 
