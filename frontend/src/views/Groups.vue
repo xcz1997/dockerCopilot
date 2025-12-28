@@ -54,6 +54,9 @@ const previewLoading = ref(false)
 // 项目列表（用于 project 类型群组的手动分配）
 const projectsList = ref([])
 
+// 手动分配筛选关键字
+const assignSearchQuery = ref('')
+
 // 规则类型选项
 const ruleTypes = [
   { value: 'name_prefix', label: '容器名称前缀' },
@@ -276,6 +279,7 @@ async function removeRule(ruleId) {
 
 async function openAssignModal(group) {
   selectedGroup.value = group
+  assignSearchQuery.value = '' // 清空搜索框
   await groupsStore.fetchGroup(group.id)
 
   // 根据群组类型加载对应的列表
@@ -333,10 +337,13 @@ const availableItems = computed(() => {
 
   const groupType = selectedGroup.value.groupType || 'container'
   const assignedIds = new Set(groupsStore.currentGroup.containers?.map(c => c.containerId) || [])
+  const query = assignSearchQuery.value.toLowerCase().trim()
+
+  let items = []
 
   if (groupType === 'project') {
     // 项目类型：显示项目列表
-    return projectsList.value
+    items = projectsList.value
       .filter(p => !assignedIds.has(p.name))
       .map(p => ({
         id: p.name,
@@ -346,7 +353,7 @@ const availableItems = computed(() => {
       }))
   } else {
     // 容器类型：显示容器列表
-    return containersStore.containers
+    items = containersStore.containers
       .filter(c => !assignedIds.has(c.id))
       .map(c => ({
         id: c.id,
@@ -355,6 +362,16 @@ const availableItems = computed(() => {
         isProject: false
       }))
   }
+
+  // 应用搜索筛选
+  if (query) {
+    items = items.filter(item =>
+      item.name.toLowerCase().includes(query) ||
+      item.image.toLowerCase().includes(query)
+    )
+  }
+
+  return items
 })
 
 // 保持兼容性的别名
@@ -726,9 +743,32 @@ const availableContainers = availableItems
 
         <!-- 可分配列表 -->
         <div class="border-t border-gray-200 dark:border-gray-600 pt-4">
-          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            可分配{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }}
-          </h4>
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              可分配{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }}
+            </h4>
+            <!-- 搜索框 -->
+            <div class="relative">
+              <input
+                v-model="assignSearchQuery"
+                type="text"
+                placeholder="搜索..."
+                class="w-48 px-3 py-1.5 pl-8 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+              <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <button
+                v-if="assignSearchQuery"
+                @click="assignSearchQuery = ''"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
           <div v-if="availableItems.length" class="max-h-60 overflow-y-auto space-y-2">
             <div v-for="c in availableItems" :key="c.id"
               class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
@@ -739,6 +779,9 @@ const availableContainers = availableItems
               <button @click="assignContainer(c)" class="btn-sm btn-primary">分配</button>
             </div>
           </div>
+          <p v-else-if="assignSearchQuery" class="text-sm text-gray-500 dark:text-gray-400">
+            没有匹配 "{{ assignSearchQuery }}" 的结果
+          </p>
           <p v-else class="text-sm text-gray-500 dark:text-gray-400">
             没有可分配的{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }}
           </p>
