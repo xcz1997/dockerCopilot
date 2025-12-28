@@ -122,6 +122,7 @@ func RegisterHandlers(engine *rest.Server) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fileServer := http.FileServer(http.FS(frontFS))
 	indexHTML, _ := fs.ReadFile(frontFS, "index.html")
 
 	// SPA 处理器
@@ -130,45 +131,15 @@ func RegisterHandlers(engine *rest.Server) {
 		w.Write(indexHTML)
 	}
 
-	// 静态资源处理器 - 直接从 embed FS 读取文件
+	// 静态资源处理器
 	assetsHandler := func(w http.ResponseWriter, r *http.Request) {
-		// 从路径中提取文件名
-		fileName := r.URL.Path[len("/assets/"):]
-		filePath := "assets/" + fileName
-
-		data, err := fs.ReadFile(frontFS, filePath)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-
-		// 设置 Content-Type
-		contentType := "application/octet-stream"
-		if len(fileName) > 3 {
-			switch fileName[len(fileName)-3:] {
-			case ".js":
-				contentType = "application/javascript"
-			case "css":
-				contentType = "text/css"
-			}
-		}
-		if len(fileName) > 4 && fileName[len(fileName)-4:] == ".css" {
-			contentType = "text/css"
-		}
-
-		w.Header().Set("Content-Type", contentType)
-		w.Write(data)
+		fileServer.ServeHTTP(w, r)
 	}
 
 	// favicon 处理器
 	faviconHandler := func(w http.ResponseWriter, r *http.Request) {
-		data, err := fs.ReadFile(frontFS, "favicon.png")
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "image/png")
-		w.Write(data)
+		r.URL.Path = "/favicon.png"
+		fileServer.ServeHTTP(w, r)
 	}
 
 	// 注册 SPA 路由
