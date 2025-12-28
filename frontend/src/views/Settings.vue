@@ -11,8 +11,17 @@ const checkingUpdate = ref(false)
 const barkConfig = ref({
   enabled: false,
   server: '',
-  key: ''
+  key: '',
+  notifyMode: 'always', // always, failure_only, success_only
+  showDetail: false
 })
+
+// 通知模式选项
+const notifyModeOptions = [
+  { value: 'always', label: '始终通知' },
+  { value: 'failure_only', label: '仅失败时通知' },
+  { value: 'success_only', label: '仅全部成功时通知' }
+]
 const barkLoading = ref(false)
 const barkSaving = ref(false)
 const barkTesting = ref(false)
@@ -53,7 +62,9 @@ async function fetchBarkConfig() {
       barkConfig.value = {
         enabled: response.data.enabled || false,
         server: response.data.server || '',
-        key: response.data.key || ''
+        key: response.data.key || '',
+        notifyMode: response.data.notifyMode || 'always',
+        showDetail: response.data.showDetail || false
       }
     }
   } catch (e) {
@@ -312,6 +323,50 @@ onMounted(() => {
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
             在 Bark App 中获取的推送密钥
           </p>
+        </div>
+
+        <!-- 通知模式 -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            通知模式
+          </label>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="option in notifyModeOptions"
+              :key="option.value"
+              @click="barkConfig.notifyMode = option.value"
+              :class="[
+                'px-3 py-1.5 rounded-lg text-sm font-medium transition-all border',
+                barkConfig.notifyMode === option.value
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                  : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300'
+              ]"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 显示明细 -->
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="font-medium text-gray-900 dark:text-white">显示具体明细</label>
+            <p class="text-sm text-gray-500 dark:text-gray-400">在通知中显示每个容器的更新结果</p>
+          </div>
+          <button
+            @click="barkConfig.showDetail = !barkConfig.showDetail"
+            :class="[
+              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+              barkConfig.showDetail ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+            ]"
+          >
+            <span
+              :class="[
+                'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                barkConfig.showDetail ? 'translate-x-6' : 'translate-x-1'
+              ]"
+            />
+          </button>
         </div>
 
         <!-- 按钮组 -->

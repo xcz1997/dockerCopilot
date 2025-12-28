@@ -83,29 +83,53 @@ func SetSettings(settings map[string]string) error {
 
 // Bark 配置相关常量
 const (
-	SettingBarkEnabled = "bark_enabled"
-	SettingBarkServer  = "bark_server"
-	SettingBarkKey     = "bark_key"
+	SettingBarkEnabled    = "bark_enabled"
+	SettingBarkServer     = "bark_server"
+	SettingBarkKey        = "bark_key"
+	SettingBarkNotifyMode = "bark_notify_mode" // always, failure_only, success_only
+	SettingBarkShowDetail = "bark_show_detail" // true/false
+)
+
+// 通知模式常量
+const (
+	NotifyModeAlways      = "always"       // 始终通知
+	NotifyModeFailureOnly = "failure_only" // 仅失败时通知
+	NotifyModeSuccessOnly = "success_only" // 仅全部成功时通知
 )
 
 // BarkConfig Bark 推送配置
 type BarkConfig struct {
-	Enabled bool   `json:"enabled"`
-	Server  string `json:"server"`
-	Key     string `json:"key"`
+	Enabled    bool   `json:"enabled"`
+	Server     string `json:"server"`
+	Key        string `json:"key"`
+	NotifyMode string `json:"notifyMode"` // always, failure_only, success_only
+	ShowDetail bool   `json:"showDetail"` // 是否显示具体明细
 }
 
 // GetBarkConfig 获取 Bark 配置
 func GetBarkConfig() (*BarkConfig, error) {
-	settings, err := GetSettings([]string{SettingBarkEnabled, SettingBarkServer, SettingBarkKey})
+	settings, err := GetSettings([]string{
+		SettingBarkEnabled,
+		SettingBarkServer,
+		SettingBarkKey,
+		SettingBarkNotifyMode,
+		SettingBarkShowDetail,
+	})
 	if err != nil {
 		return nil, err
 	}
 
+	notifyMode := settings[SettingBarkNotifyMode]
+	if notifyMode == "" {
+		notifyMode = NotifyModeAlways // 默认始终通知
+	}
+
 	return &BarkConfig{
-		Enabled: settings[SettingBarkEnabled] == "true",
-		Server:  settings[SettingBarkServer],
-		Key:     settings[SettingBarkKey],
+		Enabled:    settings[SettingBarkEnabled] == "true",
+		Server:     settings[SettingBarkServer],
+		Key:        settings[SettingBarkKey],
+		NotifyMode: notifyMode,
+		ShowDetail: settings[SettingBarkShowDetail] == "true",
 	}, nil
 }
 
@@ -116,9 +140,21 @@ func SaveBarkConfig(config *BarkConfig) error {
 		enabledStr = "true"
 	}
 
+	showDetailStr := "false"
+	if config.ShowDetail {
+		showDetailStr = "true"
+	}
+
+	notifyMode := config.NotifyMode
+	if notifyMode == "" {
+		notifyMode = NotifyModeAlways
+	}
+
 	return SetSettings(map[string]string{
-		SettingBarkEnabled: enabledStr,
-		SettingBarkServer:  config.Server,
-		SettingBarkKey:     config.Key,
+		SettingBarkEnabled:    enabledStr,
+		SettingBarkServer:     config.Server,
+		SettingBarkKey:        config.Key,
+		SettingBarkNotifyMode: notifyMode,
+		SettingBarkShowDetail: showDetailStr,
 	})
 }

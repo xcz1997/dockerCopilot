@@ -90,27 +90,82 @@ func NotifyImageUpdate(imageName string) {
 	}
 }
 
+// TaskDetail 任务明细
+type TaskDetail struct {
+	Name    string // 容器/镜像名称
+	Status  string // updated, skipped, failed
+	Message string // 详细信息
+}
+
 // NotifyGroupTaskComplete 群组任务完成通知
 func NotifyGroupTaskComplete(groupName string, taskType string, updated, skipped, failed int) {
-	var title, body string
+	NotifyGroupTaskCompleteWithDetails(groupName, taskType, updated, skipped, failed, nil)
+}
 
+// NotifyGroupTaskCompleteWithDetails 群组任务完成通知（带明细）
+func NotifyGroupTaskCompleteWithDetails(groupName string, taskType string, updated, skipped, failed int, details []TaskDetail) {
+	config, err := model.GetBarkConfig()
+	if err != nil {
+		logx.Errorf("获取 Bark 配置失败: %v", err)
+		return
+	}
+
+	if !config.Enabled {
+		return
+	}
+
+	// 根据通知模式决定是否发送
+	hasFailure := failed > 0
+	allSuccess := failed == 0
+
+	switch config.NotifyMode {
+	case model.NotifyModeFailureOnly:
+		if !hasFailure {
+			logx.Debug("无失败项，跳过通知")
+			return
+		}
+	case model.NotifyModeSuccessOnly:
+		if !allSuccess {
+			logx.Debug("有失败项，跳过通知")
+			return
+		}
+	// NotifyModeAlways 或其他值：始终通知
+	}
+
+	var title, body string
 	total := updated + skipped + failed
 
 	if taskType == "check" {
 		title = "群组检查完成"
 		if updated > 0 {
-			body = fmt.Sprintf("群组「%s」检查完成，发现 %d 个更新", groupName, updated)
+			body = fmt.Sprintf("群组「%s」检查完成，发现 %d 个可更新", groupName, updated)
 		} else {
 			body = fmt.Sprintf("群组「%s」检查完成，共 %d 个容器均为最新", groupName, total)
 		}
 	} else {
 		title = "群组更新完成"
 		if failed > 0 {
-			body = fmt.Sprintf("群组「%s」更新完成：成功 %d，跳过 %d，失败 %d", groupName, updated, skipped, failed)
+			body = fmt.Sprintf("群组「%s」：成功 %d，跳过 %d，失败 %d", groupName, updated, skipped, failed)
 		} else if updated > 0 {
-			body = fmt.Sprintf("群组「%s」更新完成：成功更新 %d 个容器", groupName, updated)
+			body = fmt.Sprintf("群组「%s」：成功更新 %d 个容器", groupName, updated)
 		} else {
-			body = fmt.Sprintf("群组「%s」更新完成：全部 %d 个容器均为最新", groupName, total)
+			body = fmt.Sprintf("群组「%s」：全部 %d 个容器均为最新", groupName, total)
+		}
+	}
+
+	// 添加明细信息
+	if config.ShowDetail && len(details) > 0 {
+		body += "\n\n"
+		for _, d := range details {
+			switch d.Status {
+			case "updated":
+				body += fmt.Sprintf("✅ %s\n", d.Name)
+			case "failed":
+				body += fmt.Sprintf("❌ %s: %s\n", d.Name, d.Message)
+			case "has_update":
+				body += fmt.Sprintf("🔄 %s (有更新)\n", d.Name)
+			// skipped 状态可以不显示，减少通知长度
+			}
 		}
 	}
 

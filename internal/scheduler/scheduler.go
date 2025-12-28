@@ -294,6 +294,7 @@ func (s *GroupScheduler) executeGroupWithProgress(groupID int64, taskID string) 
 	s.updateProgress(taskID, 10, fmt.Sprintf("找到 %d 个容器", total), taskName, "开始检查更新", false)
 
 	hasUpdateCount := 0 // 检查模式下，有可用更新的数量
+	var taskDetails []module.TaskDetail
 
 	for i, container := range containers {
 		progress := 10 + (i+1)*80/total
@@ -308,9 +309,11 @@ func (s *GroupScheduler) executeGroupWithProgress(groupID int64, taskID string) 
 				if result == "updated" {
 					updated++
 					s.updateSubTask(taskID, container.Name, "completed", "已更新")
+					taskDetails = append(taskDetails, module.TaskDetail{Name: container.Name, Status: "updated"})
 				} else if result == "failed" {
 					failed++
 					s.updateSubTask(taskID, container.Name, "failed", "更新失败")
+					taskDetails = append(taskDetails, module.TaskDetail{Name: container.Name, Status: "failed", Message: "更新失败"})
 				} else {
 					skipped++
 					s.updateSubTask(taskID, container.Name, "completed", "已是最新")
@@ -320,6 +323,7 @@ func (s *GroupScheduler) executeGroupWithProgress(groupID int64, taskID string) 
 				if hasUpdate {
 					hasUpdateCount++
 					s.updateSubTask(taskID, container.Name, "completed", "有可用更新")
+					taskDetails = append(taskDetails, module.TaskDetail{Name: container.Name, Status: "has_update"})
 				} else {
 					skipped++
 					s.updateSubTask(taskID, container.Name, "completed", "已是最新")
@@ -340,10 +344,10 @@ func (s *GroupScheduler) executeGroupWithProgress(groupID int64, taskID string) 
 
 	// 发送 Bark 通知
 	if group.AutoUpdate {
-		module.NotifyGroupTaskComplete(group.Name, "update", updated, skipped, failed)
+		module.NotifyGroupTaskCompleteWithDetails(group.Name, "update", updated, skipped, failed, taskDetails)
 	} else {
 		// 检查模式：hasUpdateCount 表示有可用更新的数量
-		module.NotifyGroupTaskComplete(group.Name, "check", hasUpdateCount, skipped, 0)
+		module.NotifyGroupTaskCompleteWithDetails(group.Name, "check", hasUpdateCount, skipped, 0, taskDetails)
 	}
 }
 
@@ -378,6 +382,7 @@ func (s *GroupScheduler) executeGroupUpdateWithProgress(groupID int64, taskID st
 	updated := 0
 	failed := 0
 	skipped := 0
+	var taskDetails []module.TaskDetail
 
 	s.updateProgress(taskID, 10, fmt.Sprintf("找到 %d 个容器", total), taskName, "开始更新", false)
 
@@ -394,6 +399,7 @@ func (s *GroupScheduler) executeGroupUpdateWithProgress(groupID int64, taskID st
 			logx.Errorf("检查容器[%s]更新失败: %v", container.Name, err)
 			s.recordHistory(group.ID, container, "", "", model.UpdateStatusFailed, err.Error())
 			s.updateSubTask(taskID, container.Name, "failed", "检查失败: "+err.Error())
+			taskDetails = append(taskDetails, module.TaskDetail{Name: container.Name, Status: "failed", Message: "检查失败"})
 			failed++
 			continue
 		}
@@ -412,6 +418,7 @@ func (s *GroupScheduler) executeGroupUpdateWithProgress(groupID int64, taskID st
 			logx.Errorf("容器[%s]更新失败: %v", container.Name, err)
 			s.recordHistory(group.ID, container, oldImage, "", model.UpdateStatusFailed, err.Error())
 			s.updateSubTask(taskID, container.Name, "failed", "更新失败: "+err.Error())
+			taskDetails = append(taskDetails, module.TaskDetail{Name: container.Name, Status: "failed", Message: err.Error()})
 			failed++
 			continue
 		}
@@ -419,6 +426,7 @@ func (s *GroupScheduler) executeGroupUpdateWithProgress(groupID int64, taskID st
 		logx.Infof("容器[%s]更新成功: %s -> %s", container.Name, oldImage, result.NewImage)
 		s.recordHistory(group.ID, container, oldImage, result.NewImage, model.UpdateStatusSuccess, "")
 		s.updateSubTask(taskID, container.Name, "completed", "更新成功")
+		taskDetails = append(taskDetails, module.TaskDetail{Name: container.Name, Status: "updated"})
 		updated++
 	}
 
@@ -427,7 +435,7 @@ func (s *GroupScheduler) executeGroupUpdateWithProgress(groupID int64, taskID st
 	logx.Infof("群组[%s]强制更新完成: %s", group.Name, summary)
 
 	// 发送 Bark 通知
-	module.NotifyGroupTaskComplete(group.Name, "update", updated, skipped, failed)
+	module.NotifyGroupTaskCompleteWithDetails(group.Name, "update", updated, skipped, failed, taskDetails)
 }
 
 // getMatchedContainers 获取匹配群组的容器
