@@ -146,6 +146,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/scheduler/status",
 				Handler: progress.SchedulerStatusHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/task/retry",
+				Handler: progress.RetryTaskHandler(serverCtx),
+			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),

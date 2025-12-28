@@ -17,6 +17,8 @@ import (
 // TaskProgressUpdater 任务进度更新接口
 type TaskProgressUpdater interface {
 	UpdateProgress(taskID string, percentage int, message string, name string, detailMsg string, isDone bool)
+	UpdateProgressWithMeta(taskID string, percentage int, message string, name string, detailMsg string, isDone bool, taskType string, targetID string, targetName string)
+	UpdateSubTask(taskID string, subTaskName string, status string, message string)
 }
 
 // GroupScheduler 群组调度器
@@ -65,6 +67,20 @@ func (s *GroupScheduler) SetProgressUpdater(updater TaskProgressUpdater) {
 func (s *GroupScheduler) updateProgress(taskID string, percentage int, message string, name string, detailMsg string, isDone bool) {
 	if s.progressUpdater != nil {
 		s.progressUpdater.UpdateProgress(taskID, percentage, message, name, detailMsg, isDone)
+	}
+}
+
+// updateProgressWithMeta 更新任务进度（带元数据）
+func (s *GroupScheduler) updateProgressWithMeta(taskID string, percentage int, message string, name string, detailMsg string, isDone bool, taskType string, targetID string, targetName string) {
+	if s.progressUpdater != nil {
+		s.progressUpdater.UpdateProgressWithMeta(taskID, percentage, message, name, detailMsg, isDone, taskType, targetID, targetName)
+	}
+}
+
+// updateSubTask 更新子任务
+func (s *GroupScheduler) updateSubTask(taskID string, subTaskName string, status string, message string) {
+	if s.progressUpdater != nil {
+		s.progressUpdater.UpdateSubTask(taskID, subTaskName, status, message)
 	}
 }
 
@@ -241,77 +257,107 @@ func (s *GroupScheduler) executeGroupUpdate(groupID int64) {
 // executeGroupWithProgress 执行群组检查任务（带进度跟踪）
 func (s *GroupScheduler) executeGroupWithProgress(groupID int64, taskID string) {
 	taskName := fmt.Sprintf("群组检查 #%d", groupID)
+	groupIDStr := fmt.Sprintf("%d", groupID)
 
 	group, err := model.GetGroupByID(groupID)
 	if err != nil {
 		logx.Errorf("获取群组[%d]失败: %v", groupID, err)
-		s.updateProgress(taskID, 0, "获取群组失败", taskName, err.Error(), true)
+		s.updateProgressWithMeta(taskID, 0, "获取群组失败", taskName, err.Error(), true, "group_check", groupIDStr, "")
 		return
 	}
 
 	taskName = fmt.Sprintf("群组检查: %s", group.Name)
-	s.updateProgress(taskID, 5, "开始检查群组", taskName, "正在获取匹配的容器", false)
+	s.updateProgressWithMeta(taskID, 5, "开始检查群组", taskName, "正在获取匹配的容器", false, "group_check", groupIDStr, group.Name)
 
 	if !group.Enabled {
-		s.updateProgress(taskID, 100, "群组已禁用", taskName, "跳过执行", true)
+		s.updateProgressWithMeta(taskID, 100, "群组已禁用", taskName, "跳过执行", true, "group_check", groupIDStr, group.Name)
 		return
 	}
 
 	containers, err := s.getMatchedContainers(groupID)
 	if err != nil {
 		logx.Errorf("获取群组[%s]容器失败: %v", group.Name, err)
-		s.updateProgress(taskID, 0, "获取容器失败", taskName, err.Error(), true)
+		s.updateProgressWithMeta(taskID, 0, "获取容器失败", taskName, err.Error(), true, "group_check", groupIDStr, group.Name)
 		return
 	}
 
 	if len(containers) == 0 {
-		s.updateProgress(taskID, 100, "完成", taskName, "没有匹配的容器", true)
+		s.updateProgressWithMeta(taskID, 100, "完成", taskName, "没有匹配的容器", true, "group_check", groupIDStr, group.Name)
 		return
 	}
 
 	total := len(containers)
+	updated := 0
+	failed := 0
+	skipped := 0
+
 	s.updateProgress(taskID, 10, fmt.Sprintf("找到 %d 个容器", total), taskName, "开始检查更新", false)
 
 	for i, container := range containers {
 		progress := 10 + (i+1)*80/total
 		s.updateProgress(taskID, progress, fmt.Sprintf("检查 %s (%d/%d)", container.Name, i+1, total), taskName, "", false)
 
+		// 更新子任务状态
+		s.updateSubTask(taskID, container.Name, "in_progress", "检查中...")
+
 		if group.CheckUpdate {
 			if group.AutoUpdate {
-				s.checkAndUpdate(group, container)
+				result := s.checkAndUpdateWithResult(group, container)
+				if result == "updated" {
+					updated++
+					s.updateSubTask(taskID, container.Name, "completed", "已更新")
+				} else if result == "failed" {
+					failed++
+					s.updateSubTask(taskID, container.Name, "failed", "更新失败")
+				} else {
+					skipped++
+					s.updateSubTask(taskID, container.Name, "completed", "已是最新")
+				}
 			} else {
-				s.checkOnly(group, container)
+				hasUpdate := s.checkOnly(group, container)
+				if hasUpdate {
+					s.updateSubTask(taskID, container.Name, "completed", "有可用更新")
+				} else {
+					s.updateSubTask(taskID, container.Name, "completed", "已是最新")
+				}
+				skipped++
 			}
 		}
 	}
 
-	s.updateProgress(taskID, 100, "检查完成", taskName, fmt.Sprintf("已检查 %d 个容器", total), true)
-	logx.Infof("群组[%s]检查任务执行完成", group.Name)
+	summary := fmt.Sprintf("已检查 %d 个容器", total)
+	if group.AutoUpdate {
+		summary = fmt.Sprintf("更新: %d, 跳过: %d, 失败: %d", updated, skipped, failed)
+	}
+
+	s.updateProgressWithMeta(taskID, 100, "检查完成", taskName, summary, true, "group_check", groupIDStr, group.Name)
+	logx.Infof("群组[%s]检查任务执行完成: %s", group.Name, summary)
 }
 
 // executeGroupUpdateWithProgress 强制执行群组更新（带进度跟踪）
 func (s *GroupScheduler) executeGroupUpdateWithProgress(groupID int64, taskID string) {
 	taskName := fmt.Sprintf("群组更新 #%d", groupID)
+	groupIDStr := fmt.Sprintf("%d", groupID)
 
 	group, err := model.GetGroupByID(groupID)
 	if err != nil {
 		logx.Errorf("获取群组[%d]失败: %v", groupID, err)
-		s.updateProgress(taskID, 0, "获取群组失败", taskName, err.Error(), true)
+		s.updateProgressWithMeta(taskID, 0, "获取群组失败", taskName, err.Error(), true, "group_update", groupIDStr, "")
 		return
 	}
 
 	taskName = fmt.Sprintf("群组更新: %s", group.Name)
-	s.updateProgress(taskID, 5, "开始更新群组", taskName, "正在获取匹配的容器", false)
+	s.updateProgressWithMeta(taskID, 5, "开始更新群组", taskName, "正在获取匹配的容器", false, "group_update", groupIDStr, group.Name)
 
 	containers, err := s.getMatchedContainers(groupID)
 	if err != nil {
 		logx.Errorf("获取群组[%s]容器失败: %v", group.Name, err)
-		s.updateProgress(taskID, 0, "获取容器失败", taskName, err.Error(), true)
+		s.updateProgressWithMeta(taskID, 0, "获取容器失败", taskName, err.Error(), true, "group_update", groupIDStr, group.Name)
 		return
 	}
 
 	if len(containers) == 0 {
-		s.updateProgress(taskID, 100, "完成", taskName, "没有匹配的容器", true)
+		s.updateProgressWithMeta(taskID, 100, "完成", taskName, "没有匹配的容器", true, "group_update", groupIDStr, group.Name)
 		return
 	}
 
@@ -326,36 +372,45 @@ func (s *GroupScheduler) executeGroupUpdateWithProgress(groupID int64, taskID st
 		progress := 10 + (i+1)*80/total
 		s.updateProgress(taskID, progress, fmt.Sprintf("更新 %s (%d/%d)", container.Name, i+1, total), taskName, "", false)
 
+		// 更新子任务状态
+		s.updateSubTask(taskID, container.Name, "in_progress", "检查更新中...")
+
 		executor := NewExecutor(s.dockerClient, s.hubImageInfo)
 		hasUpdate, err := executor.CheckUpdate(context.Background(), container)
 		if err != nil {
 			logx.Errorf("检查容器[%s]更新失败: %v", container.Name, err)
 			s.recordHistory(group.ID, container, "", "", model.UpdateStatusFailed, err.Error())
+			s.updateSubTask(taskID, container.Name, "failed", "检查失败: "+err.Error())
 			failed++
 			continue
 		}
 
 		if !hasUpdate {
+			s.updateSubTask(taskID, container.Name, "completed", "已是最新")
 			skipped++
 			continue
 		}
+
+		s.updateSubTask(taskID, container.Name, "in_progress", "正在更新...")
 
 		oldImage := container.Image
 		result, err := executor.Update(context.Background(), container)
 		if err != nil {
 			logx.Errorf("容器[%s]更新失败: %v", container.Name, err)
 			s.recordHistory(group.ID, container, oldImage, "", model.UpdateStatusFailed, err.Error())
+			s.updateSubTask(taskID, container.Name, "failed", "更新失败: "+err.Error())
 			failed++
 			continue
 		}
 
 		logx.Infof("容器[%s]更新成功: %s -> %s", container.Name, oldImage, result.NewImage)
 		s.recordHistory(group.ID, container, oldImage, result.NewImage, model.UpdateStatusSuccess, "")
+		s.updateSubTask(taskID, container.Name, "completed", "更新成功")
 		updated++
 	}
 
 	summary := fmt.Sprintf("更新: %d, 跳过: %d, 失败: %d", updated, skipped, failed)
-	s.updateProgress(taskID, 100, "更新完成", taskName, summary, true)
+	s.updateProgressWithMeta(taskID, 100, "更新完成", taskName, summary, true, "group_update", groupIDStr, group.Name)
 	logx.Infof("群组[%s]强制更新完成: %s", group.Name, summary)
 }
 
@@ -365,13 +420,13 @@ func (s *GroupScheduler) getMatchedContainers(groupID int64) ([]MatchedContainer
 	return matcher.GetMatchedContainers(context.Background(), groupID)
 }
 
-// checkOnly 仅检查更新
-func (s *GroupScheduler) checkOnly(group *model.ContainerGroup, container MatchedContainer) {
+// checkOnly 仅检查更新，返回是否有更新
+func (s *GroupScheduler) checkOnly(group *model.ContainerGroup, container MatchedContainer) bool {
 	executor := NewExecutor(s.dockerClient, s.hubImageInfo)
 	hasUpdate, err := executor.CheckUpdate(context.Background(), container)
 	if err != nil {
 		logx.Errorf("检查容器[%s]更新失败: %v", container.Name, err)
-		return
+		return false
 	}
 
 	if hasUpdate {
@@ -379,9 +434,41 @@ func (s *GroupScheduler) checkOnly(group *model.ContainerGroup, container Matche
 	} else {
 		logx.Infof("容器[%s]已是最新版本", container.Name)
 	}
+	return hasUpdate
 }
 
-// checkAndUpdate 检查并更新
+// checkAndUpdateWithResult 检查并更新，返回结果: "updated", "skipped", "failed"
+func (s *GroupScheduler) checkAndUpdateWithResult(group *model.ContainerGroup, container MatchedContainer) string {
+	executor := NewExecutor(s.dockerClient, s.hubImageInfo)
+
+	hasUpdate, err := executor.CheckUpdate(context.Background(), container)
+	if err != nil {
+		logx.Errorf("检查容器[%s]更新失败: %v", container.Name, err)
+		s.recordHistory(group.ID, container, "", "", model.UpdateStatusFailed, err.Error())
+		return "failed"
+	}
+
+	if !hasUpdate {
+		logx.Infof("容器[%s]已是最新版本", container.Name)
+		return "skipped"
+	}
+
+	logx.Infof("容器[%s]开始更新", container.Name)
+
+	oldImage := container.Image
+	result, err := executor.Update(context.Background(), container)
+	if err != nil {
+		logx.Errorf("容器[%s]更新失败: %v", container.Name, err)
+		s.recordHistory(group.ID, container, oldImage, "", model.UpdateStatusFailed, err.Error())
+		return "failed"
+	}
+
+	logx.Infof("容器[%s]更新成功: %s -> %s", container.Name, oldImage, result.NewImage)
+	s.recordHistory(group.ID, container, oldImage, result.NewImage, model.UpdateStatusSuccess, "")
+	return "updated"
+}
+
+// checkAndUpdate 检查并更新（保持兼容）
 func (s *GroupScheduler) checkAndUpdate(group *model.ContainerGroup, container MatchedContainer) {
 	executor := NewExecutor(s.dockerClient, s.hubImageInfo)
 

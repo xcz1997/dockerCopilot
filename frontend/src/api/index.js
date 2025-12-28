@@ -106,7 +106,8 @@ const api = {
   },
 
   tasks: {
-    list: (status = 'current') => instance.get('/tasks', { params: { status } })
+    list: (status = 'current') => instance.get('/tasks', { params: { status } }),
+    retry: (taskId) => instance.post('/task/retry', null, { params: { taskId } })
   },
 
   projects: {

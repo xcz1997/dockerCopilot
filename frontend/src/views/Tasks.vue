@@ -1,31 +1,27 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useToastStore } from '@/stores/toast'
 import api from '@/api'
 
+const toastStore = useToastStore()
 const tasks = ref([])
+const stats = ref({ total: 0, inProgress: 0, completed: 0, failed: 0 })
 const loading = ref(true)
 const filterStatus = ref('current') // current, history, all
+const expandedTasks = ref(new Set())
+const retryingTasks = ref(new Set())
 let pollTimer = null
 
 const filteredTasks = computed(() => {
   return tasks.value
 })
 
-const stats = computed(() => {
-  const all = tasks.value
-  return {
-    total: all.length,
-    inProgress: all.filter(t => t.status === 'in_progress').length,
-    completed: all.filter(t => t.status === 'completed').length,
-    failed: all.filter(t => t.status === 'failed').length
-  }
-})
-
 async function fetchTasks() {
   try {
     const response = await api.tasks.list(filterStatus.value)
-    if (response.code === 200) {
-      tasks.value = response.data || []
+    if (response.code === 200 && response.data) {
+      tasks.value = response.data.tasks || []
+      stats.value = response.data.stats || { total: 0, inProgress: 0, completed: 0, failed: 0 }
     }
   } catch (e) {
     console.error('获取任务列表失败:', e)
@@ -41,14 +37,55 @@ function getStatusBadge(status) {
   return { class: 'badge-gray', text: status }
 }
 
+function getSubTaskStatusClass(status) {
+  if (status === 'completed') return 'text-emerald-600 dark:text-emerald-400'
+  if (status === 'failed') return 'text-red-600 dark:text-red-400'
+  if (status === 'in_progress') return 'text-blue-600 dark:text-blue-400'
+  return 'text-gray-500 dark:text-gray-400'
+}
+
 function getProgressColor(status) {
   if (status === 'completed') return 'bg-emerald-500'
   if (status === 'failed') return 'bg-red-500'
   return 'bg-primary-500'
 }
 
+function toggleExpand(taskId) {
+  if (expandedTasks.value.has(taskId)) {
+    expandedTasks.value.delete(taskId)
+  } else {
+    expandedTasks.value.add(taskId)
+  }
+}
+
+function isExpanded(taskId) {
+  return expandedTasks.value.has(taskId)
+}
+
+async function retryTask(task) {
+  if (retryingTasks.value.has(task.taskId)) return
+
+  retryingTasks.value.add(task.taskId)
+  try {
+    const response = await api.tasks.retry(task.taskId)
+    if (response.code === 200) {
+      toastStore.success(`已创建重试任务`)
+      fetchTasks()
+    } else {
+      toastStore.error(response.msg || '重试失败')
+    }
+  } catch (e) {
+    toastStore.error('重试失败: ' + e.message)
+  } finally {
+    retryingTasks.value.delete(task.taskId)
+  }
+}
+
+function canRetry(task) {
+  return task.status === 'failed' && task.taskType && task.targetId
+}
+
 function startPolling() {
-  // 每秒轮询一次
   pollTimer = setInterval(() => {
     fetchTasks()
   }, 1000)
@@ -79,7 +116,7 @@ onUnmounted(() => {
 
 <template>
   <div class="space-y-6">
-    <!-- 统计卡片 -->
+    <!-- 统计卡片 - 始终显示全部任务的统计 -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
       <div class="card card-hover p-4">
         <div class="flex items-center gap-3">
@@ -218,15 +255,43 @@ onUnmounted(() => {
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
                   {{ task.name || '未命名任务' }}
                 </h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  ID: {{ task.taskId }}
-                </p>
+                <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                  <span>开始: {{ task.startedAt }}</span>
+                  <span v-if="task.finishedAt">| 完成: {{ task.finishedAt }}</span>
+                </div>
               </div>
             </div>
 
-            <span :class="['badge', getStatusBadge(task.status).class]">
-              {{ getStatusBadge(task.status).text }}
-            </span>
+            <div class="flex items-center gap-2">
+              <!-- 重试按钮 -->
+              <button
+                v-if="canRetry(task)"
+                @click="retryTask(task)"
+                :disabled="retryingTasks.has(task.taskId)"
+                class="px-3 py-1.5 text-sm bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors disabled:opacity-50"
+              >
+                <span v-if="retryingTasks.has(task.taskId)">重试中...</span>
+                <span v-else>重试</span>
+              </button>
+
+              <!-- 展开按钮 -->
+              <button
+                v-if="task.subTasks && task.subTasks.length > 0"
+                @click="toggleExpand(task.taskId)"
+                class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+              >
+                <svg
+                  :class="['w-5 h-5 transition-transform', isExpanded(task.taskId) ? 'rotate-180' : '']"
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              <span :class="['badge', getStatusBadge(task.status).class]">
+                {{ getStatusBadge(task.status).text }}
+              </span>
+            </div>
           </div>
 
           <!-- 进度条 -->
@@ -240,6 +305,53 @@ onUnmounted(() => {
                 :class="['h-2.5 rounded-full transition-all duration-500', getProgressColor(task.status)]"
                 :style="{ width: `${task.progress}%` }"
               ></div>
+            </div>
+            <p v-if="task.detailMsg" class="text-xs text-gray-500 dark:text-gray-400">
+              {{ task.detailMsg }}
+            </p>
+          </div>
+
+          <!-- 子任务列表 -->
+          <div
+            v-if="task.subTasks && task.subTasks.length > 0 && isExpanded(task.taskId)"
+            class="mt-2 border-t border-gray-200 dark:border-gray-700 pt-4"
+          >
+            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              子任务 ({{ task.subTasks.length }})
+            </h4>
+            <div class="space-y-2">
+              <div
+                v-for="(subTask, index) in task.subTasks"
+                :key="index"
+                class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
+              >
+                <div class="flex items-center gap-3">
+                  <!-- 子任务状态图标 -->
+                  <div class="flex-shrink-0">
+                    <svg v-if="subTask.status === 'completed'" class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <svg v-else-if="subTask.status === 'failed'" class="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <svg v-else-if="subTask.status === 'in_progress'" class="w-4 h-4 text-blue-500 animate-spin" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    <div v-else class="w-4 h-4 rounded-full border-2 border-gray-300 dark:border-gray-600"></div>
+                  </div>
+
+                  <div>
+                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ subTask.name }}</p>
+                    <p :class="['text-xs', getSubTaskStatusClass(subTask.status)]">{{ subTask.message }}</p>
+                  </div>
+                </div>
+
+                <div class="text-xs text-gray-500 dark:text-gray-400 text-right">
+                  <p v-if="subTask.startedAt">开始: {{ subTask.startedAt }}</p>
+                  <p v-if="subTask.finishedAt">完成: {{ subTask.finishedAt }}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

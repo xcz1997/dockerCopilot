@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/docker/docker/client"
 	"github.com/xcz1997/dockerCopilot/internal/config"
@@ -30,6 +31,15 @@ type ServiceContext struct {
 	mu                         sync.Mutex
 }
 
+// SubTask 子任务
+type SubTask struct {
+	Name       string     `json:"name"`
+	Status     string     `json:"status"` // pending, in_progress, completed, failed
+	Message    string     `json:"message"`
+	StartedAt  *time.Time `json:"startedAt,omitempty"`
+	FinishedAt *time.Time `json:"finishedAt,omitempty"`
+}
+
 type TaskProgress struct {
 	TaskID     string
 	Percentage int
@@ -37,6 +47,13 @@ type TaskProgress struct {
 	Name       string
 	DetailMsg  string
 	IsDone     bool
+	StartedAt  time.Time
+	FinishedAt *time.Time
+	SubTasks   []SubTask
+	// 用于重试的元数据
+	TaskType   string // container_update, group_check, group_update
+	TargetID   string // 容器ID或群组ID
+	TargetName string // 容器名或群组名
 }
 
 type ProgressStoreType map[string]TaskProgress
@@ -108,12 +125,105 @@ func NewProgressAdapter(ctx *ServiceContext) *ProgressAdapter {
 
 // UpdateProgress 实现 scheduler.TaskProgressUpdater 接口
 func (a *ProgressAdapter) UpdateProgress(taskID string, percentage int, message string, name string, detailMsg string, isDone bool) {
-	a.svcCtx.UpdateProgress(taskID, TaskProgress{
-		TaskID:     taskID,
-		Percentage: percentage,
-		Message:    message,
-		Name:       name,
-		DetailMsg:  detailMsg,
-		IsDone:     isDone,
-	})
+	a.svcCtx.mu.Lock()
+	defer a.svcCtx.mu.Unlock()
+
+	now := time.Now()
+	existing, exists := a.svcCtx.ProgressStore[taskID]
+
+	if !exists {
+		// 新任务
+		existing = TaskProgress{
+			TaskID:    taskID,
+			StartedAt: now,
+		}
+	}
+
+	existing.Percentage = percentage
+	existing.Message = message
+	existing.Name = name
+	existing.DetailMsg = detailMsg
+	existing.IsDone = isDone
+
+	if isDone && existing.FinishedAt == nil {
+		existing.FinishedAt = &now
+	}
+
+	a.svcCtx.ProgressStore[taskID] = existing
+}
+
+// UpdateProgressWithMeta 更新进度并设置元数据（用于重试）
+func (a *ProgressAdapter) UpdateProgressWithMeta(taskID string, percentage int, message string, name string, detailMsg string, isDone bool, taskType string, targetID string, targetName string) {
+	a.svcCtx.mu.Lock()
+	defer a.svcCtx.mu.Unlock()
+
+	now := time.Now()
+	existing, exists := a.svcCtx.ProgressStore[taskID]
+
+	if !exists {
+		existing = TaskProgress{
+			TaskID:     taskID,
+			StartedAt:  now,
+			TaskType:   taskType,
+			TargetID:   targetID,
+			TargetName: targetName,
+		}
+	}
+
+	existing.Percentage = percentage
+	existing.Message = message
+	existing.Name = name
+	existing.DetailMsg = detailMsg
+	existing.IsDone = isDone
+
+	if isDone && existing.FinishedAt == nil {
+		existing.FinishedAt = &now
+	}
+
+	a.svcCtx.ProgressStore[taskID] = existing
+}
+
+// UpdateSubTask 更新子任务
+func (a *ProgressAdapter) UpdateSubTask(taskID string, subTaskName string, status string, message string) {
+	a.svcCtx.mu.Lock()
+	defer a.svcCtx.mu.Unlock()
+
+	existing, exists := a.svcCtx.ProgressStore[taskID]
+	if !exists {
+		return
+	}
+
+	now := time.Now()
+	found := false
+	for i, st := range existing.SubTasks {
+		if st.Name == subTaskName {
+			existing.SubTasks[i].Status = status
+			existing.SubTasks[i].Message = message
+			if status == "in_progress" && existing.SubTasks[i].StartedAt == nil {
+				existing.SubTasks[i].StartedAt = &now
+			}
+			if (status == "completed" || status == "failed") && existing.SubTasks[i].FinishedAt == nil {
+				existing.SubTasks[i].FinishedAt = &now
+			}
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		subTask := SubTask{
+			Name:    subTaskName,
+			Status:  status,
+			Message: message,
+		}
+		if status == "in_progress" {
+			subTask.StartedAt = &now
+		}
+		if status == "completed" || status == "failed" {
+			subTask.FinishedAt = &now
+		}
+		existing.SubTasks = append(existing.SubTasks, subTask)
+	}
+
+	a.svcCtx.ProgressStore[taskID] = existing
 }
