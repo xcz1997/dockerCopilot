@@ -51,6 +51,9 @@ const newRule = ref({
 const previewContainers = ref([])
 const previewLoading = ref(false)
 
+// 项目列表（用于 project 类型群组的手动分配）
+const projectsList = ref([])
+
 // 规则类型选项
 const ruleTypes = [
   { value: 'name_prefix', label: '容器名称前缀' },
@@ -274,6 +277,19 @@ async function removeRule(ruleId) {
 async function openAssignModal(group) {
   selectedGroup.value = group
   await groupsStore.fetchGroup(group.id)
+
+  // 根据群组类型加载对应的列表
+  if (group.groupType === 'project') {
+    try {
+      const response = await api.projects.list()
+      if (response.code === 200) {
+        projectsList.value = response.data || []
+      }
+    } catch (e) {
+      console.error('获取项目列表失败:', e)
+    }
+  }
+
   showAssignModal.value = true
 }
 
@@ -311,18 +327,38 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleString('zh-CN')
 }
 
-// 获取可分配的容器列表
-const availableContainers = computed(() => {
-  if (!groupsStore.currentGroup) return []
+// 获取可分配的列表（根据群组类型）
+const availableItems = computed(() => {
+  if (!groupsStore.currentGroup || !selectedGroup.value) return []
+
+  const groupType = selectedGroup.value.groupType || 'container'
   const assignedIds = new Set(groupsStore.currentGroup.containers?.map(c => c.containerId) || [])
-  return containersStore.containers
-    .filter(c => !assignedIds.has(c.id))
-    .map(c => ({
-      id: c.id,
-      name: c.name || c.Names?.[0]?.replace(/^\//, '') || 'unknown',
-      image: c.usingImage || c.Image
-    }))
+
+  if (groupType === 'project') {
+    // 项目类型：显示项目列表
+    return projectsList.value
+      .filter(p => !assignedIds.has(p.name))
+      .map(p => ({
+        id: p.name,
+        name: p.name,
+        image: `${p.running}/${p.total} 运行中`,
+        isProject: true
+      }))
+  } else {
+    // 容器类型：显示容器列表
+    return containersStore.containers
+      .filter(c => !assignedIds.has(c.id))
+      .map(c => ({
+        id: c.id,
+        name: c.name || c.Names?.[0]?.replace(/^\//, '') || 'unknown',
+        image: c.usingImage || c.Image,
+        isProject: false
+      }))
+  }
 })
+
+// 保持兼容性的别名
+const availableContainers = availableItems
 </script>
 
 <template>
@@ -664,12 +700,14 @@ const availableContainers = computed(() => {
     <div v-if="showAssignModal && selectedGroup" class="modal-overlay" @click.self="showAssignModal = false">
       <div class="modal-content max-w-2xl">
         <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-          手动分配容器 - {{ selectedGroup.name }}
+          手动分配{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }} - {{ selectedGroup.name }}
         </h3>
 
-        <!-- 已分配容器 -->
+        <!-- 已分配项 -->
         <div class="mb-6">
-          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">已分配容器</h4>
+          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            已分配{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }}
+          </h4>
           <div v-if="groupsStore.currentGroup?.containers?.length" class="space-y-2">
             <div v-for="c in groupsStore.currentGroup.containers" :key="c.id"
               class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
@@ -681,14 +719,18 @@ const availableContainers = computed(() => {
               </button>
             </div>
           </div>
-          <p v-else class="text-sm text-gray-500 dark:text-gray-400">暂无手动分配的容器</p>
+          <p v-else class="text-sm text-gray-500 dark:text-gray-400">
+            暂无手动分配的{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }}
+          </p>
         </div>
 
-        <!-- 可分配容器 -->
+        <!-- 可分配列表 -->
         <div class="border-t border-gray-200 dark:border-gray-600 pt-4">
-          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">可分配容器</h4>
-          <div v-if="availableContainers.length" class="max-h-60 overflow-y-auto space-y-2">
-            <div v-for="c in availableContainers" :key="c.id"
+          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            可分配{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }}
+          </h4>
+          <div v-if="availableItems.length" class="max-h-60 overflow-y-auto space-y-2">
+            <div v-for="c in availableItems" :key="c.id"
               class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
               <div>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">{{ c.name }}</span>
@@ -697,7 +739,9 @@ const availableContainers = computed(() => {
               <button @click="assignContainer(c)" class="btn-sm btn-primary">分配</button>
             </div>
           </div>
-          <p v-else class="text-sm text-gray-500 dark:text-gray-400">没有可分配的容器</p>
+          <p v-else class="text-sm text-gray-500 dark:text-gray-400">
+            没有可分配的{{ selectedGroup.groupType === 'project' ? '项目' : '容器' }}
+          </p>
         </div>
 
         <div class="flex justify-end mt-6">
