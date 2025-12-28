@@ -28,9 +28,11 @@ func (l *BarkSaveLogic) BarkSave(req *types.BarkConfigReq) (resp *types.Resp, er
 	resp = &types.Resp{}
 
 	config := &model.BarkConfig{
-		Enabled: req.Enabled,
-		Server:  req.Server,
-		Key:     req.Key,
+		Enabled:    req.Enabled,
+		Server:     req.Server,
+		Key:        req.Key,
+		NotifyMode: req.NotifyMode,
+		ShowDetail: req.ShowDetail,
 	}
 
 	if err := model.SaveBarkConfig(config); err != nil {

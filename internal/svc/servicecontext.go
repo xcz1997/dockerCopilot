@@ -15,6 +15,36 @@ import (
 	"github.com/zeromicro/go-zero/rest"
 )
 
+// 从 model.SubTask 转换到本地 SubTask（保持兼容性）
+func convertFromModelSubTasks(modelSubTasks []model.SubTask) []SubTask {
+	result := make([]SubTask, len(modelSubTasks))
+	for i, st := range modelSubTasks {
+		result[i] = SubTask{
+			Name:       st.Name,
+			Status:     st.Status,
+			Message:    st.Message,
+			StartedAt:  st.StartedAt,
+			FinishedAt: st.FinishedAt,
+		}
+	}
+	return result
+}
+
+// 从本地 SubTask 转换到 model.SubTask
+func convertToModelSubTasks(subTasks []SubTask) []model.SubTask {
+	result := make([]model.SubTask, len(subTasks))
+	for i, st := range subTasks {
+		result[i] = model.SubTask{
+			Name:       st.Name,
+			Status:     st.Status,
+			Message:    st.Message,
+			StartedAt:  st.StartedAt,
+			FinishedAt: st.FinishedAt,
+		}
+	}
+	return result
+}
+
 type ServiceContext struct {
 	Config                     config.Config
 	CookieCheckMiddleware      rest.Middleware
@@ -94,23 +124,95 @@ func (ctx *ServiceContext) UpdateProgress(taskID string, progress TaskProgress) 
 	ctx.mu.Lock()
 	defer ctx.mu.Unlock()
 	ctx.ProgressStore[taskID] = progress
+
+	// 持久化到数据库
+	task := &model.Task{
+		ID:         progress.TaskID,
+		Name:       progress.Name,
+		Message:    progress.Message,
+		DetailMsg:  progress.DetailMsg,
+		Percentage: progress.Percentage,
+		IsDone:     progress.IsDone,
+		TaskType:   progress.TaskType,
+		TargetID:   progress.TargetID,
+		TargetName: progress.TargetName,
+		SubTasks:   convertToModelSubTasks(progress.SubTasks),
+		StartedAt:  progress.StartedAt,
+		FinishedAt: progress.FinishedAt,
+	}
+	if err := model.SaveTask(task); err != nil {
+		logx.Errorf("保存任务到数据库失败: %v", err)
+	}
 }
 
 func (ctx *ServiceContext) GetProgress(taskID string) (TaskProgress, bool) {
 	ctx.mu.Lock()
 	defer ctx.mu.Unlock()
+
+	// 优先从内存缓存获取
 	progress, ok := ctx.ProgressStore[taskID]
-	return progress, ok
+	if ok {
+		return progress, true
+	}
+
+	// 从数据库获取
+	task, err := model.GetTask(taskID)
+	if err != nil || task == nil {
+		return TaskProgress{}, false
+	}
+
+	// 转换并缓存
+	progress = TaskProgress{
+		TaskID:     task.ID,
+		Name:       task.Name,
+		Message:    task.Message,
+		DetailMsg:  task.DetailMsg,
+		Percentage: task.Percentage,
+		IsDone:     task.IsDone,
+		TaskType:   task.TaskType,
+		TargetID:   task.TargetID,
+		TargetName: task.TargetName,
+		SubTasks:   convertFromModelSubTasks(task.SubTasks),
+		StartedAt:  task.StartedAt,
+		FinishedAt: task.FinishedAt,
+	}
+	ctx.ProgressStore[taskID] = progress
+	return progress, true
 }
 
 func (ctx *ServiceContext) GetAllTasks() []TaskProgress {
-	ctx.mu.Lock()
-	defer ctx.mu.Unlock()
-	tasks := make([]TaskProgress, 0, len(ctx.ProgressStore))
-	for _, task := range ctx.ProgressStore {
-		tasks = append(tasks, task)
+	// 从数据库获取所有任务
+	tasks, err := model.GetAllTasks()
+	if err != nil {
+		logx.Errorf("从数据库获取任务列表失败: %v", err)
+		// 回退到内存缓存
+		ctx.mu.Lock()
+		defer ctx.mu.Unlock()
+		result := make([]TaskProgress, 0, len(ctx.ProgressStore))
+		for _, task := range ctx.ProgressStore {
+			result = append(result, task)
+		}
+		return result
 	}
-	return tasks
+
+	result := make([]TaskProgress, len(tasks))
+	for i, task := range tasks {
+		result[i] = TaskProgress{
+			TaskID:     task.ID,
+			Name:       task.Name,
+			Message:    task.Message,
+			DetailMsg:  task.DetailMsg,
+			Percentage: task.Percentage,
+			IsDone:     task.IsDone,
+			TaskType:   task.TaskType,
+			TargetID:   task.TargetID,
+			TargetName: task.TargetName,
+			SubTasks:   convertFromModelSubTasks(task.SubTasks),
+			StartedAt:  task.StartedAt,
+			FinishedAt: task.FinishedAt,
+		}
+	}
+	return result
 }
 
 // ProgressAdapter 适配器，实现 scheduler.TaskProgressUpdater 接口
@@ -150,6 +252,25 @@ func (a *ProgressAdapter) UpdateProgress(taskID string, percentage int, message 
 	}
 
 	a.svcCtx.ProgressStore[taskID] = existing
+
+	// 持久化到数据库
+	task := &model.Task{
+		ID:         existing.TaskID,
+		Name:       existing.Name,
+		Message:    existing.Message,
+		DetailMsg:  existing.DetailMsg,
+		Percentage: existing.Percentage,
+		IsDone:     existing.IsDone,
+		TaskType:   existing.TaskType,
+		TargetID:   existing.TargetID,
+		TargetName: existing.TargetName,
+		SubTasks:   convertToModelSubTasks(existing.SubTasks),
+		StartedAt:  existing.StartedAt,
+		FinishedAt: existing.FinishedAt,
+	}
+	if err := model.SaveTask(task); err != nil {
+		logx.Errorf("保存任务到数据库失败: %v", err)
+	}
 }
 
 // UpdateProgressWithMeta 更新进度并设置元数据（用于重试）
@@ -181,6 +302,25 @@ func (a *ProgressAdapter) UpdateProgressWithMeta(taskID string, percentage int, 
 	}
 
 	a.svcCtx.ProgressStore[taskID] = existing
+
+	// 持久化到数据库
+	task := &model.Task{
+		ID:         existing.TaskID,
+		Name:       existing.Name,
+		Message:    existing.Message,
+		DetailMsg:  existing.DetailMsg,
+		Percentage: existing.Percentage,
+		IsDone:     existing.IsDone,
+		TaskType:   existing.TaskType,
+		TargetID:   existing.TargetID,
+		TargetName: existing.TargetName,
+		SubTasks:   convertToModelSubTasks(existing.SubTasks),
+		StartedAt:  existing.StartedAt,
+		FinishedAt: existing.FinishedAt,
+	}
+	if err := model.SaveTask(task); err != nil {
+		logx.Errorf("保存任务到数据库失败: %v", err)
+	}
 }
 
 // UpdateSubTask 更新子任务
@@ -226,4 +366,23 @@ func (a *ProgressAdapter) UpdateSubTask(taskID string, subTaskName string, statu
 	}
 
 	a.svcCtx.ProgressStore[taskID] = existing
+
+	// 持久化到数据库
+	task := &model.Task{
+		ID:         existing.TaskID,
+		Name:       existing.Name,
+		Message:    existing.Message,
+		DetailMsg:  existing.DetailMsg,
+		Percentage: existing.Percentage,
+		IsDone:     existing.IsDone,
+		TaskType:   existing.TaskType,
+		TargetID:   existing.TargetID,
+		TargetName: existing.TargetName,
+		SubTasks:   convertToModelSubTasks(existing.SubTasks),
+		StartedAt:  existing.StartedAt,
+		FinishedAt: existing.FinishedAt,
+	}
+	if err := model.SaveTask(task); err != nil {
+		logx.Errorf("保存任务到数据库失败: %v", err)
+	}
 }

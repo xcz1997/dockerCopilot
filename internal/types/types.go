@@ -155,9 +155,11 @@ type HistoryListReq struct {
 // ======== 设置管理类型 ========
 
 type BarkConfigReq struct {
-	Enabled bool   `json:"enabled"`
-	Server  string `json:"server"`
-	Key     string `json:"key"`
+	Enabled    bool   `json:"enabled"`
+	Server     string `json:"server"`
+	Key        string `json:"key"`
+	NotifyMode string `json:"notifyMode"` // always, failure_only, success_only
+	ShowDetail bool   `json:"showDetail"` // 是否显示具体明细
 }
 
 type BarkTestReq struct {

@@ -168,6 +168,38 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 
+	// 任务表
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS tasks (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			message TEXT NOT NULL DEFAULT '',
+			detail_msg TEXT NOT NULL DEFAULT '',
+			percentage INTEGER NOT NULL DEFAULT 0,
+			is_done INTEGER NOT NULL DEFAULT 0,
+			task_type TEXT NOT NULL DEFAULT '',
+			target_id TEXT NOT NULL DEFAULT '',
+			target_name TEXT NOT NULL DEFAULT '',
+			sub_tasks TEXT NOT NULL DEFAULT '[]',
+			started_at DATETIME NOT NULL,
+			finished_at DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// 创建任务索引
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_is_done ON tasks(is_done)`)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_started_at ON tasks(started_at)`)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

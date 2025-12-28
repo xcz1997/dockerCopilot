@@ -365,14 +365,17 @@ const availableItems = computed(() => {
       }))
   } else if (groupType === 'image') {
     // 镜像类型：显示镜像列表
+    // 后端返回字段: id, name, tag, size(已格式化字符串), inUsed, createTime, haveUpdate
     items = imagesList.value
       .filter(img => !assignedIds.has(img.id || img.Id))
       .map(img => {
         const imageId = img.id || img.Id || ''
-        const imageName = img.imageName || img.RepoTags?.[0] || imageId.substring(0, 12)
-        const imageTag = img.imageTag || ''
+        // 后端返回的字段是 name 和 tag，不是 imageName 和 imageTag
+        const imageName = img.name || img.imageName || img.RepoTags?.[0] || imageId.substring(0, 12)
+        const imageTag = img.tag || img.imageTag || ''
         const displayName = imageTag && imageName ? `${imageName}:${imageTag}` : imageName
-        const sizeStr = img.size ? `${(img.size / 1024 / 1024).toFixed(1)} MB` : ''
+        // 后端返回的 size 已经是格式化后的字符串（如 "100 MB"），直接使用
+        const sizeStr = img.size || ''
         return {
           id: imageId,
           name: displayName,
