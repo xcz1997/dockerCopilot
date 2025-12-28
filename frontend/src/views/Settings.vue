@@ -173,7 +173,7 @@ onMounted(() => {
           <div v-else-if="version" class="space-y-3">
             <!-- 当前版本信息 -->
             <div class="flex items-center flex-wrap gap-2">
-              <span class="badge badge-info">v{{ version.localVersion || version.version }}</span>
+              <span class="badge badge-info">{{ version.localVersion || version.version }}</span>
               <span v-if="version.isDocker" class="badge badge-secondary">
                 <svg class="w-3 h-3 mr-1" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M13.983 11.078h2.119a.186.186 0 00.186-.186V9.006a.186.186 0 00-.186-.186h-2.119a.186.186 0 00-.186.186v1.886c0 .103.083.186.186.186z"/>
@@ -190,7 +190,7 @@ onMounted(() => {
               </svg>
               <div class="flex-1">
                 <p class="text-sm font-medium text-orange-700 dark:text-orange-300">
-                  发现新版本 v{{ version.remoteVersion }}
+                  发现新版本 {{ version.remoteVersion }}
                 </p>
                 <p class="text-xs text-orange-600 dark:text-orange-400 mt-1">
                   {{ version.updateMessage }}
