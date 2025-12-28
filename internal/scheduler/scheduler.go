@@ -124,9 +124,10 @@ func (s *GroupScheduler) AddJob(group model.ContainerGroup) error {
 		delete(s.jobs, group.ID)
 	}
 
-	// 添加新任务
+	// 添加新任务 - 使用带进度跟踪的版本，这样任务会显示在任务列表中
 	entryID, err := s.cron.AddFunc(group.CronExpr, func() {
-		s.executeGroup(group.ID)
+		taskID := s.generateTaskID("cron")
+		s.executeGroupWithProgress(group.ID, taskID)
 	})
 	if err != nil {
 		return err
@@ -169,53 +170,6 @@ func (s *GroupScheduler) TriggerGroup(groupID int64, forceUpdate bool) string {
 		}
 	}()
 	return taskID
-}
-
-// executeGroup 执行群组定时任务
-func (s *GroupScheduler) executeGroup(groupID int64) {
-	logx.Infof("=== 定时任务触发: 群组ID=%d, 当前时间=%s ===", groupID, time.Now().Format("2006-01-02 15:04:05"))
-
-	group, err := model.GetGroupByID(groupID)
-	if err != nil {
-		logx.Errorf("获取群组[%d]失败: %v", groupID, err)
-		return
-	}
-
-	if !group.Enabled {
-		logx.Infof("群组[%s]已禁用，跳过执行", group.Name)
-		return
-	}
-
-	logx.Infof("开始执行群组[%s]定时任务 (cron: %s)", group.Name, group.CronExpr)
-
-	// 获取匹配的容器
-	containers, err := s.getMatchedContainers(groupID)
-	if err != nil {
-		logx.Errorf("获取群组[%s]容器失败: %v", group.Name, err)
-		return
-	}
-
-	if len(containers) == 0 {
-		logx.Infof("群组[%s]没有匹配的容器", group.Name)
-		return
-	}
-
-	logx.Infof("群组[%s]匹配到%d个容器", group.Name, len(containers))
-
-	// 根据群组配置执行
-	if group.CheckUpdate {
-		for _, container := range containers {
-			if group.AutoUpdate {
-				// 检查并自动更新
-				s.checkAndUpdate(group, container)
-			} else {
-				// 仅检查更新
-				s.checkOnly(group, container)
-			}
-		}
-	}
-
-	logx.Infof("群组[%s]定时任务执行完成", group.Name)
 }
 
 // executeGroupUpdate 强制执行群组更新

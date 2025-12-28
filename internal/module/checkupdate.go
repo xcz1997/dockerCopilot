@@ -4,31 +4,53 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	ref "github.com/distribution/reference"
-	"github.com/xcz1997/dockerCopilot/internal/types"
-	"github.com/zeromicro/go-zero/core/logx"
 	"io"
 	"net"
 	"net/http"
 	url2 "net/url"
 	"strings"
+	"sync"
 	"time"
+
+	ref "github.com/distribution/reference"
+	"github.com/xcz1997/dockerCopilot/internal/types"
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 // ImageCheckList 检查更新处理后的镜像列表
 type ImageCheckList struct {
 	NeedUpdate bool
 }
+
 type ImageUpdateData struct {
 	Data map[string]ImageCheckList
+	mu   sync.RWMutex
 }
 
 const ContentDigestHeader = "Docker-Content-Digest"
+
+// 并发检测的最大 goroutine 数量
+const maxConcurrentChecks = 10
 
 func NewImageCheck() *ImageUpdateData {
 	return &ImageUpdateData{
 		Data: map[string]ImageCheckList{},
 	}
+}
+
+// setImageCheck 线程安全地设置镜像检查结果
+func (i *ImageUpdateData) setImageCheck(imageID string, result ImageCheckList) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.Data[imageID] = result
+}
+
+// GetImageCheck 线程安全地获取镜像检查结果
+func (i *ImageUpdateData) GetImageCheck(imageID string) (ImageCheckList, bool) {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	result, ok := i.Data[imageID]
+	return result, ok
 }
 // IsSelfImage 判断是否为 DockerCopilot 自身镜像
 func IsSelfImage(imageName string) bool {
@@ -38,6 +60,8 @@ func IsSelfImage(imageName string) bool {
 }
 
 func (i *ImageUpdateData) CheckUpdate(imageList []types.Image) {
+	// 过滤出需要检查的镜像
+	var imagesToCheck []types.Image
 	for _, image := range imageList {
 		// 跳过自身镜像
 		if IsSelfImage(image.ImageName) {
@@ -48,46 +72,78 @@ func (i *ImageUpdateData) CheckUpdate(imageList []types.Image) {
 			logx.Debugf("跳过无效镜像: %s (ID: %s)", image.ImageName, image.ID)
 			continue
 		}
-		i.checkSingleImage(image)
+		imagesToCheck = append(imagesToCheck, image)
 	}
+
+	if len(imagesToCheck) == 0 {
+		logx.Info("没有需要检查更新的镜像")
+		return
+	}
+
+	logx.Infof("开始并发检查 %d 个镜像的更新状态 (并发数: %d)", len(imagesToCheck), maxConcurrentChecks)
+	startTime := time.Now()
+
+	// 使用带缓冲的 channel 作为信号量控制并发数
+	semaphore := make(chan struct{}, maxConcurrentChecks)
+	var wg sync.WaitGroup
+
+	for _, image := range imagesToCheck {
+		wg.Add(1)
+		go func(img types.Image) {
+			defer wg.Done()
+			// 获取信号量
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			i.checkSingleImage(img)
+		}(image)
+	}
+
+	wg.Wait()
+	logx.Infof("镜像更新检查完成，耗时: %v", time.Since(startTime))
 }
 
 func (i *ImageUpdateData) checkSingleImage(image types.Image) {
 	token, err := GetToken(image, "")
 	if err != nil {
-		logx.Error("获取token失败或者无需获取token，继续尝试检查" + err.Error())
+		logx.Debugf("获取token失败或者无需获取token，继续尝试检查: %s", err.Error())
 	}
 	digestURL, err := BuildManifestURL(image)
 	if err != nil {
-		logx.Error("获取digestURL失败" + err.Error())
+		logx.Errorf("获取digestURL失败 [%s:%s]: %s", image.ImageName, image.ImageTag, err.Error())
 		return
 	}
 	remoteDigest, err := GetDigest(digestURL, token)
 	if err != nil {
-		logx.Error("获取digest失败" + err.Error())
+		logx.Errorf("获取digest失败 [%s:%s]: %s", image.ImageName, image.ImageTag, err.Error())
 		return
 	}
 	if len(image.RepoDigests) == 0 {
-		logx.Error("未在本地获取到repoDigest" + image.ImageName + ":" + image.ImageTag)
+		logx.Errorf("未在本地获取到repoDigest: %s:%s", image.ImageName, image.ImageTag)
 		return
 	}
 	needUpdate := false
 	for _, localRepoDigests := range image.RepoDigests {
-		localDigest := strings.Split(localRepoDigests, "@")[1]
+		parts := strings.Split(localRepoDigests, "@")
+		if len(parts) < 2 {
+			logx.Errorf("无效的本地 digest 格式: %s", localRepoDigests)
+			continue
+		}
+		localDigest := parts[1]
 		if remoteDigest != localDigest {
 			if remoteDigest == "" || localDigest == "" {
-				logx.Error("Digest为空" + image.ImageName + ":" + image.ImageTag)
+				logx.Errorf("Digest为空 [%s:%s]", image.ImageName, image.ImageTag)
 				continue
 			}
-			logx.Info(image.ImageName + ":" + image.ImageTag + " need update")
-			logx.Infof("localDigest: %s, remoteDigest: %s", localDigest, remoteDigest)
+			logx.Infof("%s:%s 需要更新 (本地: %s, 远程: %s)", image.ImageName, image.ImageTag, localDigest[:12], remoteDigest[:12])
 			needUpdate = true
 		} else {
-			logx.Info(image.ImageName + ":" + image.ImageTag + " not need update")
+			logx.Debugf("%s:%s 已是最新版本", image.ImageName, image.ImageTag)
 			needUpdate = false
 		}
 	}
-	i.Data[image.ID] = ImageCheckList{NeedUpdate: needUpdate}
+	// 使用线程安全的方法设置结果
+	i.setImageCheck(image.ID, ImageCheckList{NeedUpdate: needUpdate})
 }
 
 func BuildManifestURL(image types.Image) (string, error) {
