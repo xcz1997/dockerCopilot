@@ -1,12 +1,14 @@
 package utiles
 
 import (
-	"github.com/xcz1997/dockerCopilot/internal/config"
-	"github.com/zeromicro/go-zero/core/logx"
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+
+	"github.com/xcz1997/dockerCopilot/internal/config"
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 // VersionInfo 版本信息结构
@@ -97,7 +99,8 @@ func GetVersionInfo() (*VersionInfo, error) {
 	}
 
 	info.RemoteVersion = remoteVersion
-	info.HasUpdate = remoteVersion != localVersion
+	// 只有当远程版本大于本地版本时才提示更新
+	info.HasUpdate = compareVersions(remoteVersion, localVersion) > 0
 
 	if info.HasUpdate {
 		if isDocker {
@@ -110,6 +113,41 @@ func GetVersionInfo() (*VersionInfo, error) {
 	}
 
 	return info, nil
+}
+
+// compareVersions 比较两个语义化版本号
+// 返回: 1 表示 v1 > v2, -1 表示 v1 < v2, 0 表示相等
+func compareVersions(v1, v2 string) int {
+	// 去掉 v 前缀
+	v1 = strings.TrimPrefix(v1, "v")
+	v2 = strings.TrimPrefix(v2, "v")
+
+	parts1 := strings.Split(v1, ".")
+	parts2 := strings.Split(v2, ".")
+
+	// 比较每个部分
+	maxLen := len(parts1)
+	if len(parts2) > maxLen {
+		maxLen = len(parts2)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		var num1, num2 int
+		if i < len(parts1) {
+			num1, _ = strconv.Atoi(parts1[i])
+		}
+		if i < len(parts2) {
+			num2, _ = strconv.Atoi(parts2[i])
+		}
+
+		if num1 > num2 {
+			return 1
+		} else if num1 < num2 {
+			return -1
+		}
+	}
+
+	return 0
 }
 
 func fetchVersionFromURL(url string) (string, error) {
