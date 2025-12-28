@@ -99,7 +99,39 @@ func (s *GroupScheduler) Start() error {
 
 	s.cron.Start()
 	logx.Infof("群组调度器已启动，加载了 %d 个定时任务", loadedCount)
+
+	// 启动定期状态报告 (每小时)
+	go s.periodicStatusReport()
+
 	return nil
+}
+
+// periodicStatusReport 定期打印调度器状态
+func (s *GroupScheduler) periodicStatusReport() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.PrintStatus()
+	}
+}
+
+// PrintStatus 打印调度器当前状态
+func (s *GroupScheduler) PrintStatus() {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	entries := s.cron.Entries()
+	logx.Infof("=== 调度器状态: 共 %d 个定时任务 ===", len(entries))
+
+	for groupID, entryID := range s.jobs {
+		entry := s.cron.Entry(entryID)
+		if entry.Valid() {
+			logx.Infof("  群组ID=%d: 下次执行=%s", groupID, entry.Next.Format("2006-01-02 15:04:05"))
+		} else {
+			logx.Warnf("  群组ID=%d: 任务无效", groupID)
+		}
+	}
 }
 
 // Stop 停止调度器
@@ -124,17 +156,28 @@ func (s *GroupScheduler) AddJob(group model.ContainerGroup) error {
 		delete(s.jobs, group.ID)
 	}
 
+	// 显式捕获 groupID 和 groupName，避免闭包捕获问题
+	groupID := group.ID
+	groupName := group.Name
+	cronExpr := group.CronExpr
+
 	// 添加新任务 - 使用带进度跟踪的版本，这样任务会显示在任务列表中
-	entryID, err := s.cron.AddFunc(group.CronExpr, func() {
+	entryID, err := s.cron.AddFunc(cronExpr, func() {
+		logx.Infof("=== Cron 任务触发: 群组[%s] ID=%d, 时间=%s ===", groupName, groupID, time.Now().Format("2006-01-02 15:04:05"))
 		taskID := s.generateTaskID("cron")
-		s.executeGroupWithProgress(group.ID, taskID)
+		s.executeGroupWithProgress(groupID, taskID)
 	})
 	if err != nil {
+		logx.Errorf("添加群组[%s] cron 任务失败: %v (表达式: %s)", group.Name, err, cronExpr)
 		return err
 	}
 
 	s.jobs[group.ID] = entryID
-	logx.Infof("群组[%s]定时任务已添加: %s", group.Name, group.CronExpr)
+
+	// 获取下次执行时间
+	entry := s.cron.Entry(entryID)
+	nextRun := entry.Next.Format("2006-01-02 15:04:05")
+	logx.Infof("群组[%s]定时任务已添加: cron=%s, 下次执行=%s", group.Name, cronExpr, nextRun)
 	return nil
 }
 
@@ -398,6 +441,71 @@ func (s *GroupScheduler) GetJobStatus(groupID int64) (bool, *cron.Entry) {
 
 	entry := s.cron.Entry(entryID)
 	return true, &entry
+}
+
+// SchedulerStatus 调度器状态信息
+type SchedulerStatus struct {
+	Running    bool              `json:"running"`
+	Timezone   string            `json:"timezone"`
+	TotalJobs  int               `json:"totalJobs"`
+	Jobs       []JobStatus       `json:"jobs"`
+}
+
+// JobStatus 单个任务状态
+type JobStatus struct {
+	GroupID   int64  `json:"groupId"`
+	GroupName string `json:"groupName"`
+	CronExpr  string `json:"cronExpr"`
+	NextRun   string `json:"nextRun"`
+	Valid     bool   `json:"valid"`
+}
+
+// GetSchedulerStatus 获取调度器状态
+func (s *GroupScheduler) GetSchedulerStatus() SchedulerStatus {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	tz := os.Getenv("TZ")
+	if tz == "" {
+		tz = "Asia/Shanghai"
+	}
+
+	status := SchedulerStatus{
+		Running:   true,
+		Timezone:  tz,
+		TotalJobs: len(s.jobs),
+		Jobs:      make([]JobStatus, 0, len(s.jobs)),
+	}
+
+	for groupID, entryID := range s.jobs {
+		entry := s.cron.Entry(entryID)
+
+		// 获取群组信息
+		group, err := model.GetGroupByID(groupID)
+		groupName := fmt.Sprintf("群组#%d", groupID)
+		cronExpr := ""
+		if err == nil && group != nil {
+			groupName = group.Name
+			cronExpr = group.CronExpr
+		}
+
+		jobStatus := JobStatus{
+			GroupID:   groupID,
+			GroupName: groupName,
+			CronExpr:  cronExpr,
+			Valid:     entry.Valid(),
+		}
+
+		if entry.Valid() {
+			jobStatus.NextRun = entry.Next.Format("2006-01-02 15:04:05")
+		} else {
+			jobStatus.NextRun = "无效"
+		}
+
+		status.Jobs = append(status.Jobs, jobStatus)
+	}
+
+	return status
 }
 
 // ReloadAllJobs 重新加载所有任务

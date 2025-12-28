@@ -141,6 +141,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/tasks",
 				Handler: progress.ListTasksHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/scheduler/status",
+				Handler: progress.SchedulerStatusHandler(serverCtx),
+			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
