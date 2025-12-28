@@ -40,6 +40,18 @@ func NewExecutor(dockerClient *client.Client, hubImageInfo *module.ImageUpdateDa
 
 // CheckUpdate 检查容器是否有更新
 func (e *Executor) CheckUpdate(ctx context.Context, container MatchedContainer) (bool, error) {
+	// 优先使用 hubImageInfo 中已检测的结果（与前端显示一致）
+	if e.hubImageInfo != nil {
+		if info, ok := e.hubImageInfo.GetImageCheck(container.ImageID); ok {
+			logx.Infof("容器[%s]使用缓存的更新状态: needUpdate=%v (镜像ID: %s)",
+				container.Name, info.NeedUpdate, container.ImageID[:12])
+			return info.NeedUpdate, nil
+		}
+	}
+
+	// 如果缓存中没有，则实际拉取检查
+	logx.Infof("容器[%s]缓存中无更新状态，开始拉取检查", container.Name)
+
 	// 获取本地镜像信息
 	localInspect, _, err := e.dockerClient.ImageInspectWithRaw(ctx, container.ImageID)
 	if err != nil {
