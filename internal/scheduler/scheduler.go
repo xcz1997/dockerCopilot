@@ -129,7 +129,7 @@ func (s *GroupScheduler) PrintStatus() {
 		if entry.Valid() {
 			logx.Infof("  群组ID=%d: 下次执行=%s", groupID, entry.Next.Format("2006-01-02 15:04:05"))
 		} else {
-			logx.Warnf("  群组ID=%d: 任务无效", groupID)
+			logx.Errorf("  群组ID=%d: 任务无效", groupID)
 		}
 	}
 }
