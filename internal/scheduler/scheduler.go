@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -32,8 +33,23 @@ type GroupScheduler struct {
 func NewGroupScheduler(dockerClient *client.Client, hubImageInfo *module.ImageUpdateData) *GroupScheduler {
 	// 使用标准的 5 字段 cron 格式 (分 时 日 月 周)，与前端预设一致
 	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+
+	// 获取时区，优先使用 TZ 环境变量，默认 Asia/Shanghai
+	var loc *time.Location
+	tz := os.Getenv("TZ")
+	if tz == "" {
+		tz = "Asia/Shanghai"
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		logx.Errorf("加载时区[%s]失败: %v，使用本地时区", tz, err)
+		loc = time.Local
+	} else {
+		logx.Infof("调度器使用时区: %s", tz)
+	}
+
 	return &GroupScheduler{
-		cron:         cron.New(cron.WithParser(parser)),
+		cron:         cron.New(cron.WithParser(parser), cron.WithLocation(loc)),
 		dockerClient: dockerClient,
 		hubImageInfo: hubImageInfo,
 		jobs:         make(map[int64]cron.EntryID),
@@ -66,16 +82,23 @@ func (s *GroupScheduler) Start() error {
 		return err
 	}
 
+	logx.Infof("找到 %d 个启用的群组", len(groups))
+
+	loadedCount := 0
 	for _, group := range groups {
 		if group.CronExpr != "" {
 			if err := s.AddJob(group); err != nil {
 				logx.Errorf("添加群组[%s]定时任务失败: %v", group.Name, err)
+			} else {
+				loadedCount++
 			}
+		} else {
+			logx.Infof("群组[%s]没有设置 cron 表达式，跳过", group.Name)
 		}
 	}
 
 	s.cron.Start()
-	logx.Info("群组调度器已启动")
+	logx.Infof("群组调度器已启动，加载了 %d 个定时任务", loadedCount)
 	return nil
 }
 
@@ -150,6 +173,8 @@ func (s *GroupScheduler) TriggerGroup(groupID int64, forceUpdate bool) string {
 
 // executeGroup 执行群组定时任务
 func (s *GroupScheduler) executeGroup(groupID int64) {
+	logx.Infof("=== 定时任务触发: 群组ID=%d, 当前时间=%s ===", groupID, time.Now().Format("2006-01-02 15:04:05"))
+
 	group, err := model.GetGroupByID(groupID)
 	if err != nil {
 		logx.Errorf("获取群组[%d]失败: %v", groupID, err)
@@ -161,7 +186,7 @@ func (s *GroupScheduler) executeGroup(groupID int64) {
 		return
 	}
 
-	logx.Infof("开始执行群组[%s]定时任务", group.Name)
+	logx.Infof("开始执行群组[%s]定时任务 (cron: %s)", group.Name, group.CronExpr)
 
 	// 获取匹配的容器
 	containers, err := s.getMatchedContainers(groupID)

@@ -98,6 +98,7 @@ type GetNewImageReq struct {
 
 type GroupCreateReq struct {
 	Name        string `json:"name"`
+	GroupType   string `json:"groupType,optional,default=container"`
 	CronExpr    string `json:"cronExpr,optional"`
 	AutoUpdate  bool   `json:"autoUpdate,optional"`
 	CheckUpdate bool   `json:"checkUpdate,default=true"`
@@ -108,6 +109,7 @@ type GroupCreateReq struct {
 type GroupUpdateReq struct {
 	Id          int64  `path:"id"`
 	Name        string `json:"name,optional"`
+	GroupType   string `json:"groupType,optional"`
 	CronExpr    string `json:"cronExpr,optional"`
 	AutoUpdate  bool   `json:"autoUpdate,optional"`
 	CheckUpdate bool   `json:"checkUpdate,optional"`

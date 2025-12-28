@@ -60,6 +60,9 @@ func (l *GroupUpdateLogic) GroupUpdate(req *types.GroupUpdateReq) (resp *types.R
 	if req.Name != "" {
 		existing.Name = req.Name
 	}
+	if req.GroupType != "" {
+		existing.GroupType = req.GroupType
+	}
 	existing.CronExpr = req.CronExpr
 	existing.AutoUpdate = req.AutoUpdate
 	existing.CheckUpdate = req.CheckUpdate

@@ -58,8 +58,13 @@ func (l *GroupCreateLogic) GroupCreate(req *types.GroupCreateReq) (resp *types.R
 	}
 
 	// 创建群组
+	groupType := req.GroupType
+	if groupType == "" {
+		groupType = model.GroupTypeContainer
+	}
 	group := &model.ContainerGroup{
 		Name:        req.Name,
+		GroupType:   groupType,
 		CronExpr:    req.CronExpr,
 		AutoUpdate:  req.AutoUpdate,
 		CheckUpdate: req.CheckUpdate,
