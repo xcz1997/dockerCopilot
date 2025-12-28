@@ -89,3 +89,32 @@ func NotifyImageUpdate(imageName string) {
 		logx.Errorf("发送镜像更新通知失败: %v", err)
 	}
 }
+
+// NotifyGroupTaskComplete 群组任务完成通知
+func NotifyGroupTaskComplete(groupName string, taskType string, updated, skipped, failed int) {
+	var title, body string
+
+	total := updated + skipped + failed
+
+	if taskType == "check" {
+		title = "群组检查完成"
+		if updated > 0 {
+			body = fmt.Sprintf("群组「%s」检查完成，发现 %d 个更新", groupName, updated)
+		} else {
+			body = fmt.Sprintf("群组「%s」检查完成，共 %d 个容器均为最新", groupName, total)
+		}
+	} else {
+		title = "群组更新完成"
+		if failed > 0 {
+			body = fmt.Sprintf("群组「%s」更新完成：成功 %d，跳过 %d，失败 %d", groupName, updated, skipped, failed)
+		} else if updated > 0 {
+			body = fmt.Sprintf("群组「%s」更新完成：成功更新 %d 个容器", groupName, updated)
+		} else {
+			body = fmt.Sprintf("群组「%s」更新完成：全部 %d 个容器均为最新", groupName, total)
+		}
+	}
+
+	if err := SendBarkNotification(title, body); err != nil {
+		logx.Errorf("发送群组任务通知失败: %v", err)
+	}
+}

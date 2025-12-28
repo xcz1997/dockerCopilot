@@ -293,6 +293,8 @@ func (s *GroupScheduler) executeGroupWithProgress(groupID int64, taskID string) 
 
 	s.updateProgress(taskID, 10, fmt.Sprintf("找到 %d 个容器", total), taskName, "开始检查更新", false)
 
+	hasUpdateCount := 0 // 检查模式下，有可用更新的数量
+
 	for i, container := range containers {
 		progress := 10 + (i+1)*80/total
 		s.updateProgress(taskID, progress, fmt.Sprintf("检查 %s (%d/%d)", container.Name, i+1, total), taskName, "", false)
@@ -316,11 +318,12 @@ func (s *GroupScheduler) executeGroupWithProgress(groupID int64, taskID string) 
 			} else {
 				hasUpdate := s.checkOnly(group, container)
 				if hasUpdate {
+					hasUpdateCount++
 					s.updateSubTask(taskID, container.Name, "completed", "有可用更新")
 				} else {
+					skipped++
 					s.updateSubTask(taskID, container.Name, "completed", "已是最新")
 				}
-				skipped++
 			}
 		}
 	}
@@ -328,10 +331,20 @@ func (s *GroupScheduler) executeGroupWithProgress(groupID int64, taskID string) 
 	summary := fmt.Sprintf("已检查 %d 个容器", total)
 	if group.AutoUpdate {
 		summary = fmt.Sprintf("更新: %d, 跳过: %d, 失败: %d", updated, skipped, failed)
+	} else if hasUpdateCount > 0 {
+		summary = fmt.Sprintf("发现 %d 个可更新, %d 个已是最新", hasUpdateCount, skipped)
 	}
 
 	s.updateProgressWithMeta(taskID, 100, "检查完成", taskName, summary, true, "group_check", groupIDStr, group.Name)
 	logx.Infof("群组[%s]检查任务执行完成: %s", group.Name, summary)
+
+	// 发送 Bark 通知
+	if group.AutoUpdate {
+		module.NotifyGroupTaskComplete(group.Name, "update", updated, skipped, failed)
+	} else {
+		// 检查模式：hasUpdateCount 表示有可用更新的数量
+		module.NotifyGroupTaskComplete(group.Name, "check", hasUpdateCount, skipped, 0)
+	}
 }
 
 // executeGroupUpdateWithProgress 强制执行群组更新（带进度跟踪）
@@ -412,6 +425,9 @@ func (s *GroupScheduler) executeGroupUpdateWithProgress(groupID int64, taskID st
 	summary := fmt.Sprintf("更新: %d, 跳过: %d, 失败: %d", updated, skipped, failed)
 	s.updateProgressWithMeta(taskID, 100, "更新完成", taskName, summary, true, "group_update", groupIDStr, group.Name)
 	logx.Infof("群组[%s]强制更新完成: %s", group.Name, summary)
+
+	// 发送 Bark 通知
+	module.NotifyGroupTaskComplete(group.Name, "update", updated, skipped, failed)
 }
 
 // getMatchedContainers 获取匹配群组的容器
