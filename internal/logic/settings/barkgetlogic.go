@@ -38,9 +38,11 @@ func (l *BarkGetLogic) BarkGet() (resp *types.Resp, err error) {
 	resp.Code = 200
 	resp.Msg = "success"
 	resp.Data = map[string]interface{}{
-		"enabled": config.Enabled,
-		"server":  config.Server,
-		"key":     config.Key,
+		"enabled":    config.Enabled,
+		"server":     config.Server,
+		"key":        config.Key,
+		"notifyMode": config.NotifyMode,
+		"showDetail": config.ShowDetail,
 	}
 	return resp, nil
 }
