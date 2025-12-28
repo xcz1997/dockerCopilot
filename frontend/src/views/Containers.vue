@@ -2,10 +2,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useContainersStore } from '@/stores/containers'
+import { useToastStore } from '@/stores/toast'
 import api from '@/api'
 
 const router = useRouter()
 const containersStore = useContainersStore()
+const toastStore = useToastStore()
+
+// 防抖状态：记录正在提交后台更新的容器ID
+const submittingBackgroundUpdate = ref(new Set())
 
 const searchQuery = ref('')
 const filterStatus = ref('all')
@@ -196,8 +201,32 @@ async function pollProgress(taskId) {
 async function handleBackgroundUpdate() {
   const container = selectedContainer.value
   const id = container.id
+  const containerName = container.name
+
+  // 防抖检查：如果正在提交，直接返回
+  if (submittingBackgroundUpdate.value.has(id)) {
+    toastStore.warning('请勿重复点击，正在提交中...')
+    return
+  }
 
   try {
+    // 先检查是否已有相同容器的进行中任务
+    const tasksResponse = await api.tasks.list('current')
+    if (tasksResponse.code === 200 && tasksResponse.data) {
+      const existingTask = tasksResponse.data.find(
+        task => task.name?.includes(containerName) && task.status === 'in_progress'
+      )
+      if (existingTask) {
+        toastStore.warning(`容器 "${containerName}" 已有更新任务正在进行中`)
+        showUpdateModal.value = false
+        router.push({ name: 'tasks' })
+        return
+      }
+    }
+
+    // 标记为正在提交
+    submittingBackgroundUpdate.value.add(id)
+
     const result = await containersStore.updateContainer(
       id,
       container.usingImage,
@@ -206,13 +235,17 @@ async function handleBackgroundUpdate() {
 
     if (result.success && result.data?.taskId) {
       showUpdateModal.value = false
+      toastStore.success(`容器 "${containerName}" 的更新任务已添加到后台`)
       // 跳转到任务页面
       router.push({ name: 'tasks' })
     } else if (!result.success) {
-      alert(result.message || '更新失败')
+      toastStore.error(result.message || '更新失败')
     }
   } catch (e) {
-    alert('更新失败: ' + e.message)
+    toastStore.error('更新失败: ' + e.message)
+  } finally {
+    // 移除提交状态
+    submittingBackgroundUpdate.value.delete(id)
   }
 }
 

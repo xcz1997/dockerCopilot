@@ -3,10 +3,16 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGroupsStore } from '@/stores/groups'
 import { useContainersStore } from '@/stores/containers'
+import { useToastStore } from '@/stores/toast'
+import api from '@/api'
 
 const router = useRouter()
 const groupsStore = useGroupsStore()
 const containersStore = useContainersStore()
+const toastStore = useToastStore()
+
+// 防抖状态：记录正在提交更新的群组ID
+const submittingGroupUpdate = ref(new Set())
 
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
@@ -149,33 +155,69 @@ async function toggleGroup(group) {
 }
 
 async function checkGroup(group) {
+  // 防抖检查
+  if (operatingIds.value.has(group.id)) {
+    toastStore.warning('请勿重复点击，正在处理中...')
+    return
+  }
+
   operatingIds.value.add(group.id)
   try {
     const result = await groupsStore.checkGroup(group.id)
     if (result.success && result.data?.taskId) {
+      toastStore.success(`群组 "${group.name}" 的检查任务已添加到后台`)
       // 跳转到任务页面查看进度
       router.push({ name: 'tasks' })
     } else {
-      alert(result.message || '检查任务已触发')
+      toastStore.info(result.message || '检查任务已触发')
     }
+  } catch (e) {
+    toastStore.error('检查失败: ' + e.message)
   } finally {
     operatingIds.value.delete(group.id)
   }
 }
 
 async function triggerUpdate(group) {
+  // 防抖检查：如果正在提交，直接返回
+  if (submittingGroupUpdate.value.has(group.id)) {
+    toastStore.warning('请勿重复点击，正在提交中...')
+    return
+  }
+
   if (!confirm(`确定要更新群组 "${group.name}" 中的所有容器吗？`)) return
-  operatingIds.value.add(group.id)
+
   try {
+    // 先检查是否已有相同群组的进行中任务
+    const tasksResponse = await api.tasks.list('current')
+    if (tasksResponse.code === 200 && tasksResponse.data) {
+      const existingTask = tasksResponse.data.find(
+        task => task.name?.includes(group.name) && task.status === 'in_progress'
+      )
+      if (existingTask) {
+        toastStore.warning(`群组 "${group.name}" 已有更新任务正在进行中`)
+        router.push({ name: 'tasks' })
+        return
+      }
+    }
+
+    // 标记为正在提交
+    submittingGroupUpdate.value.add(group.id)
+    operatingIds.value.add(group.id)
+
     const result = await groupsStore.triggerGroupUpdate(group.id)
     if (result.success && result.data?.taskId) {
+      toastStore.success(`群组 "${group.name}" 的更新任务已添加到后台`)
       // 跳转到任务页面查看进度
       router.push({ name: 'tasks' })
     } else {
-      alert(result.message || '更新任务已触发')
+      toastStore.error(result.message || '更新任务触发失败')
     }
+  } catch (e) {
+    toastStore.error('更新失败: ' + e.message)
   } finally {
     operatingIds.value.delete(group.id)
+    submittingGroupUpdate.value.delete(group.id)
   }
 }
 
