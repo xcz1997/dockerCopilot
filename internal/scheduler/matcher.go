@@ -53,19 +53,45 @@ func (m *Matcher) GetMatchedContainers(ctx context.Context, groupID int64) ([]Ma
 		return nil, err
 	}
 
-	// 构建手动分配的容器ID映射
-	manualMap := make(map[string]bool)
+	// 构建手动分配的容器ID映射和名称映射
+	manualMapByID := make(map[string]bool)
+	manualMapByName := make(map[string]bool)
 	for _, mc := range manualContainers {
-		manualMap[mc.ContainerID] = true
+		manualMapByID[mc.ContainerID] = true
+		// 同时按名称映射，用于容器更新后ID变化的情况
+		if mc.ContainerName != "" {
+			manualMapByName[mc.ContainerName] = true
+		}
 	}
 
 	var matched []MatchedContainer
 	matchedIDs := make(map[string]bool)
 
-	// 首先处理手动分配的容器
+	// 首先处理手动分配的容器（按ID匹配）
 	for _, c := range containers {
-		if manualMap[c.ID] {
+		if manualMapByID[c.ID] {
 			name := strings.TrimPrefix(c.Names[0], "/")
+			matched = append(matched, MatchedContainer{
+				ID:        c.ID,
+				Name:      name,
+				Image:     c.Image,
+				ImageID:   c.ImageID,
+				Labels:    c.Labels,
+				State:     c.State,
+				MatchType: "manual",
+			})
+			matchedIDs[c.ID] = true
+		}
+	}
+
+	// 再处理手动分配的容器（按名称匹配，用于容器更新后ID变化的情况）
+	for _, c := range containers {
+		if matchedIDs[c.ID] {
+			continue
+		}
+		name := strings.TrimPrefix(c.Names[0], "/")
+		if manualMapByName[name] {
+			logx.Infof("容器[%s]通过名称匹配（ID可能已变化）", name)
 			matched = append(matched, MatchedContainer{
 				ID:        c.ID,
 				Name:      name,
