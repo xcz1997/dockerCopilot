@@ -42,9 +42,20 @@ func NewExecutor(dockerClient *client.Client, hubImageInfo *module.ImageUpdateDa
 func (e *Executor) CheckUpdate(ctx context.Context, container MatchedContainer) (bool, error) {
 	// 优先使用 hubImageInfo 中已检测的结果（与前端显示一致）
 	if e.hubImageInfo != nil {
+		// 先尝试通过 ImageID 查找
 		if info, ok := e.hubImageInfo.GetImageCheck(container.ImageID); ok {
-			logx.Infof("容器[%s]使用缓存的更新状态: needUpdate=%v (镜像ID: %s)",
+			logx.Infof("容器[%s]使用缓存的更新状态(ImageID): needUpdate=%v (镜像ID: %s)",
 				container.Name, info.NeedUpdate, container.ImageID[:12])
+			return info.NeedUpdate, nil
+		}
+		// 再尝试通过镜像名称查找（容器可能使用旧版本镜像，但镜像检查结果按最新镜像ID存储）
+		imageName := container.Image
+		if !strings.Contains(imageName, ":") {
+			imageName += ":latest"
+		}
+		if info, ok := e.hubImageInfo.GetImageCheckByName(imageName); ok {
+			logx.Infof("容器[%s]使用缓存的更新状态(ImageName): needUpdate=%v (镜像名: %s)",
+				container.Name, info.NeedUpdate, imageName)
 			return info.NeedUpdate, nil
 		}
 	}

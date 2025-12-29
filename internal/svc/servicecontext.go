@@ -123,6 +123,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 func (ctx *ServiceContext) UpdateProgress(taskID string, progress TaskProgress) {
 	ctx.mu.Lock()
 	defer ctx.mu.Unlock()
+
+	// 如果 StartedAt 是零值，设置为当前时间
+	if progress.StartedAt.IsZero() {
+		progress.StartedAt = time.Now()
+	}
+
 	ctx.ProgressStore[taskID] = progress
 
 	// 持久化到数据库

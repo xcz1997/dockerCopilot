@@ -45,11 +45,28 @@ func (i *ImageUpdateData) setImageCheck(imageID string, result ImageCheckList) {
 	i.Data[imageID] = result
 }
 
+// setImageCheckByName 按镜像名称设置检查结果（用于容器查找）
+func (i *ImageUpdateData) setImageCheckByName(imageName string, imageTag string, result ImageCheckList) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	// 使用 imageName:imageTag 作为额外的 key
+	key := imageName + ":" + imageTag
+	i.Data[key] = result
+}
+
 // GetImageCheck 线程安全地获取镜像检查结果
 func (i *ImageUpdateData) GetImageCheck(imageID string) (ImageCheckList, bool) {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
 	result, ok := i.Data[imageID]
+	return result, ok
+}
+
+// GetImageCheckByName 按镜像名称获取检查结果
+func (i *ImageUpdateData) GetImageCheckByName(imageName string) (ImageCheckList, bool) {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	result, ok := i.Data[imageName]
 	return result, ok
 }
 // IsSelfImage 判断是否为 DockerCopilot 自身镜像
@@ -144,6 +161,8 @@ func (i *ImageUpdateData) checkSingleImage(image types.Image) {
 	}
 	// 使用线程安全的方法设置结果
 	i.setImageCheck(image.ID, ImageCheckList{NeedUpdate: needUpdate})
+	// 同时按镜像名称存储，方便容器通过镜像名查找
+	i.setImageCheckByName(image.ImageName, image.ImageTag, ImageCheckList{NeedUpdate: needUpdate})
 }
 
 func BuildManifestURL(image types.Image) (string, error) {
