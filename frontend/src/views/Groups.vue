@@ -4,12 +4,14 @@ import { useRouter } from 'vue-router'
 import { useGroupsStore } from '@/stores/groups'
 import { useContainersStore } from '@/stores/containers'
 import { useToastStore } from '@/stores/toast'
+import { useConfirmStore } from '@/stores/confirm'
 import api from '@/api'
 
 const router = useRouter()
 const groupsStore = useGroupsStore()
 const containersStore = useContainersStore()
 const toastStore = useToastStore()
+const confirmStore = useConfirmStore()
 
 // 防抖状态：记录正在提交更新的群组ID
 const submittingGroupUpdate = ref(new Set())
@@ -123,14 +125,15 @@ function getGroupTypeColor(type) {
 
 async function createGroup() {
   if (!newGroup.value.name) {
-    alert('请输入群组名称')
+    toastStore.warning('请输入群组名称')
     return
   }
   const result = await groupsStore.createGroup(newGroup.value)
   if (result.success) {
     showCreateModal.value = false
+    toastStore.success('群组创建成功')
   } else {
-    alert(result.message || '创建失败')
+    toastStore.error(result.message || '创建失败')
   }
 }
 
@@ -143,23 +146,34 @@ async function updateGroup() {
   const result = await groupsStore.updateGroup(editingGroup.value.id, editingGroup.value)
   if (result.success) {
     showEditModal.value = false
+    toastStore.success('群组更新成功')
   } else {
-    alert(result.message || '更新失败')
+    toastStore.error(result.message || '更新失败')
   }
 }
 
 async function deleteGroup(group) {
-  if (!confirm(`确定要删除群组 "${group.name}" 吗？`)) return
+  const confirmed = await confirmStore.show({
+    title: '删除群组',
+    message: `确定要删除群组 "${group.name}" 吗？`,
+    type: 'danger',
+    confirmText: '删除'
+  })
+  if (!confirmed) return
   const result = await groupsStore.deleteGroup(group.id)
-  if (!result.success) {
-    alert(result.message || '删除失败')
+  if (result.success) {
+    toastStore.success('群组已删除')
+  } else {
+    toastStore.error(result.message || '删除失败')
   }
 }
 
 async function toggleGroup(group) {
   const result = await groupsStore.updateGroup(group.id, { enabled: !group.enabled })
-  if (!result.success) {
-    alert(result.message || '操作失败')
+  if (result.success) {
+    toastStore.success(group.enabled ? '群组已禁用' : '群组已启用')
+  } else {
+    toastStore.error(result.message || '操作失败')
   }
 }
 
@@ -194,13 +208,19 @@ async function triggerUpdate(group) {
     return
   }
 
-  if (!confirm(`确定要更新群组 "${group.name}" 中的所有容器吗？`)) return
+  const confirmed = await confirmStore.show({
+    title: '更新群组',
+    message: `确定要更新群组 "${group.name}" 中的所有容器吗？`,
+    type: 'warning',
+    confirmText: '更新'
+  })
+  if (!confirmed) return
 
   try {
     // 先检查是否已有相同群组的进行中任务
     const tasksResponse = await api.tasks.list('current')
-    if (tasksResponse.code === 200 && tasksResponse.data) {
-      const existingTask = tasksResponse.data.find(
+    if (tasksResponse.code === 200 && tasksResponse.data?.tasks) {
+      const existingTask = tasksResponse.data.tasks.find(
         task => task.name?.includes(group.name) && task.status === 'in_progress'
       )
       if (existingTask) {
@@ -256,7 +276,7 @@ async function previewRule() {
 
 async function addRule() {
   if (!newRule.value.pattern) {
-    alert('请输入匹配模式')
+    toastStore.warning('请输入匹配模式')
     return
   }
   const result = await groupsStore.createRule({
@@ -267,16 +287,25 @@ async function addRule() {
   if (result.success) {
     newRule.value = { ruleType: 'name_prefix', pattern: '' }
     previewContainers.value = []
+    toastStore.success('规则添加成功')
   } else {
-    alert(result.message || '添加规则失败')
+    toastStore.error(result.message || '添加规则失败')
   }
 }
 
 async function removeRule(ruleId) {
-  if (!confirm('确定要删除此规则吗？')) return
+  const confirmed = await confirmStore.show({
+    title: '删除规则',
+    message: '确定要删除此规则吗？',
+    type: 'danger',
+    confirmText: '删除'
+  })
+  if (!confirmed) return
   const result = await groupsStore.deleteRule(ruleId, selectedGroup.value.id)
-  if (!result.success) {
-    alert(result.message || '删除规则失败')
+  if (result.success) {
+    toastStore.success('规则已删除')
+  } else {
+    toastStore.error(result.message || '删除规则失败')
   }
 }
 
@@ -315,16 +344,26 @@ async function assignContainer(container) {
     containerId: container.id,
     containerName: container.name
   })
-  if (!result.success) {
-    alert(result.message || '分配失败')
+  if (result.success) {
+    toastStore.success('分配成功')
+  } else {
+    toastStore.error(result.message || '分配失败')
   }
 }
 
 async function unassignContainer(assignId) {
-  if (!confirm('确定要移除此容器吗？')) return
+  const confirmed = await confirmStore.show({
+    title: '移除分配',
+    message: '确定要移除此容器吗？',
+    type: 'warning',
+    confirmText: '移除'
+  })
+  if (!confirmed) return
   const result = await groupsStore.unassignContainer(assignId, selectedGroup.value.id)
-  if (!result.success) {
-    alert(result.message || '移除失败')
+  if (result.success) {
+    toastStore.success('已移除')
+  } else {
+    toastStore.error(result.message || '移除失败')
   }
 }
 

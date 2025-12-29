@@ -1,8 +1,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useBackupsStore } from '@/stores/backups'
+import { useToastStore } from '@/stores/toast'
 
 const backupsStore = useBackupsStore()
+const toastStore = useToastStore()
 
 const showDeleteModal = ref(false)
 const showRestoreModal = ref(false)
@@ -26,8 +28,10 @@ async function handleCreateBackup() {
   createLoading.value = true
   try {
     const result = await backupsStore.createBackup()
-    if (!result.success) {
-      alert(result.message || '备份失败')
+    if (result.success) {
+      toastStore.success('备份创建成功')
+    } else {
+      toastStore.error(result.message || '备份失败')
     }
   } finally {
     createLoading.value = false
@@ -49,8 +53,9 @@ async function handleExportCompose() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      toastStore.success('Compose 配置导出成功')
     } else {
-      alert(result.message || '导出失败')
+      toastStore.error(result.message || '导出失败')
     }
   } finally {
     exportLoading.value = false
@@ -71,9 +76,9 @@ async function handleRestore() {
     const result = await backupsStore.restoreBackup(selectedBackup.value)
     if (result.success) {
       showRestoreModal.value = false
-      alert('恢复成功')
+      toastStore.success('恢复成功')
     } else {
-      alert(result.message || '恢复失败')
+      toastStore.error(result.message || '恢复失败')
     }
   } finally {
     operatingFiles.value.delete(selectedBackup.value)
@@ -94,8 +99,9 @@ async function handleDelete() {
     const result = await backupsStore.deleteBackup(selectedBackup.value)
     if (result.success) {
       showDeleteModal.value = false
+      toastStore.success('备份已删除')
     } else {
-      alert(result.message || '删除失败')
+      toastStore.error(result.message || '删除失败')
     }
   } finally {
     operatingFiles.value.delete(selectedBackup.value)

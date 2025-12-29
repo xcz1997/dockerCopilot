@@ -1,6 +1,11 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import api from '@/api'
+import { useToastStore } from '@/stores/toast'
+import { useConfirmStore } from '@/stores/confirm'
+
+const toastStore = useToastStore()
+const confirmStore = useConfirmStore()
 
 const version = ref(null)
 const loading = ref(true)
@@ -79,12 +84,12 @@ async function saveBarkConfig() {
   try {
     const response = await api.settings.saveBark(barkConfig.value)
     if (response.code === 200) {
-      alert('保存成功')
+      toastStore.success('保存成功')
     } else {
-      alert(response.msg || '保存失败')
+      toastStore.error(response.msg || '保存失败')
     }
   } catch (e) {
-    alert('保存失败: ' + e.message)
+    toastStore.error('保存失败: ' + e.message)
   } finally {
     barkSaving.value = false
   }
@@ -92,7 +97,7 @@ async function saveBarkConfig() {
 
 async function testBark() {
   if (!barkConfig.value.server || !barkConfig.value.key) {
-    alert('请先填写服务器地址和密钥')
+    toastStore.warning('请先填写服务器地址和密钥')
     return
   }
 
@@ -103,12 +108,12 @@ async function testBark() {
       key: barkConfig.value.key
     })
     if (response.code === 200) {
-      alert('测试推送已发送，请检查手机通知')
+      toastStore.success('测试推送已发送，请检查手机通知')
     } else {
-      alert(response.msg || '测试失败')
+      toastStore.error(response.msg || '测试失败')
     }
   } catch (e) {
-    alert('测试失败: ' + e.message)
+    toastStore.error('测试失败: ' + e.message)
   } finally {
     barkTesting.value = false
   }
@@ -117,26 +122,38 @@ async function testBark() {
 async function handleUpdate() {
   // Docker 环境检查
   if (version.value?.isDocker) {
-    alert('Docker 环境不支持自动更新。\n\n请手动更新镜像：\ndocker pull muuua/docker-copilot:latest\n\n然后重新创建容器。')
+    await confirmStore.show({
+      title: 'Docker 环境提示',
+      message: 'Docker 环境不支持自动更新。\n\n请手动更新镜像：\ndocker pull muuua/docker-copilot:latest\n\n然后重新创建容器。',
+      type: 'info',
+      confirmText: '知道了',
+      cancelText: '取消'
+    })
     return
   }
 
-  if (!confirm('确定要更新程序吗？更新后程序将自动重启。')) return
+  const confirmed = await confirmStore.show({
+    title: '更新程序',
+    message: '确定要更新程序吗？更新后程序将自动重启。',
+    type: 'warning',
+    confirmText: '更新'
+  })
+  if (!confirmed) return
 
   updating.value = true
   try {
     const response = await api.version.update()
     if (response.code === 200) {
-      alert('更新成功，程序正在重启...')
+      toastStore.success('更新成功，程序正在重启...')
       // 等待几秒后刷新页面
       setTimeout(() => {
         window.location.reload()
       }, 5000)
     } else {
-      alert(response.msg || '更新失败')
+      toastStore.error(response.msg || '更新失败')
     }
   } catch (e) {
-    alert('更新失败: ' + e.message)
+    toastStore.error('更新失败: ' + e.message)
   } finally {
     updating.value = false
   }

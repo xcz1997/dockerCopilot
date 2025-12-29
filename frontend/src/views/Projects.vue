@@ -1,6 +1,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import api from '@/api'
+import { useToastStore } from '@/stores/toast'
+
+const toastStore = useToastStore()
 
 const projects = ref([])
 const loading = ref(true)
@@ -107,11 +110,12 @@ async function updateService(service, projectName) {
     if (response.code === 200) {
       // 刷新项目列表
       await fetchProjects()
+      toastStore.success('服务更新成功')
     } else {
-      alert(response.msg || '更新失败')
+      toastStore.error(response.msg || '更新失败')
     }
   } catch (e) {
-    alert('更新失败: ' + e.message)
+    toastStore.error('更新失败: ' + e.message)
   } finally {
     updatingServices.value.delete(key)
   }
@@ -131,8 +135,9 @@ async function updateProject(project) {
       )
     }
     await fetchProjects()
+    toastStore.success('项目更新成功')
   } catch (e) {
-    alert('批量更新失败: ' + e.message)
+    toastStore.error('批量更新失败: ' + e.message)
   } finally {
     updatingProjects.value.delete(project.name)
   }

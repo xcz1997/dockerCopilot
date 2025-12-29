@@ -1,8 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useImagesStore } from '@/stores/images'
+import { useToastStore } from '@/stores/toast'
 
 const imagesStore = useImagesStore()
+const toastStore = useToastStore()
 
 const searchQuery = ref('')
 const filterType = ref('all')
@@ -90,8 +92,9 @@ async function handleDelete() {
     const result = await imagesStore.removeImage(id, forceDelete.value)
     if (result.success) {
       showDeleteModal.value = false
+      toastStore.success('镜像已删除')
     } else {
-      alert(result.message || '删除失败')
+      toastStore.error(result.message || '删除失败')
     }
   } finally {
     deletingIds.value.delete(id)
@@ -114,8 +117,9 @@ async function handlePull() {
     const result = await imagesStore.pullImage(imageName)
     if (result.success) {
       showPullModal.value = false
+      toastStore.success('镜像拉取成功')
     } else {
-      alert(result.message || '拉取失败')
+      toastStore.error(result.message || '拉取失败')
     }
   } finally {
     pullingIds.value.delete(id)

@@ -112,8 +112,10 @@ async function handleAction(container, action) {
         result = await containersStore.restartContainer(id)
         break
     }
-    if (!result.success) {
-      alert(result.message || '操作失败')
+    if (result.success) {
+      toastStore.success('操作成功')
+    } else {
+      toastStore.error(result.message || '操作失败')
     }
   } finally {
     operatingIds.value.delete(id)
@@ -136,8 +138,9 @@ async function handleRename() {
     const result = await containersStore.renameContainer(id, newContainerName.value.trim())
     if (result.success) {
       showRenameModal.value = false
+      toastStore.success('重命名成功')
     } else {
-      alert(result.message || '重命名失败')
+      toastStore.error(result.message || '重命名失败')
     }
   } finally {
     operatingIds.value.delete(id)
@@ -166,7 +169,7 @@ async function handleUpdate() {
       // 轮询进度
       await pollProgress(result.data.taskId)
     } else if (!result.success) {
-      alert(result.message || '更新失败')
+      toastStore.error(result.message || '更新失败')
     }
   } finally {
     operatingIds.value.delete(id)
@@ -212,8 +215,8 @@ async function handleBackgroundUpdate() {
   try {
     // 先检查是否已有相同容器的进行中任务
     const tasksResponse = await api.tasks.list('current')
-    if (tasksResponse.code === 200 && tasksResponse.data) {
-      const existingTask = tasksResponse.data.find(
+    if (tasksResponse.code === 200 && tasksResponse.data?.tasks) {
+      const existingTask = tasksResponse.data.tasks.find(
         task => task.name?.includes(containerName) && task.status === 'in_progress'
       )
       if (existingTask) {
@@ -280,12 +283,12 @@ async function handleAssignGroup() {
     })
     if (response.code === 200) {
       showGroupModal.value = false
-      alert('成功加入群组')
+      toastStore.success('成功加入群组')
     } else {
-      alert(response.msg || '加入群组失败')
+      toastStore.error(response.msg || '加入群组失败')
     }
   } catch (e) {
-    alert('加入群组失败: ' + e.message)
+    toastStore.error('加入群组失败: ' + e.message)
   } finally {
     assigningGroup.value = false
   }
