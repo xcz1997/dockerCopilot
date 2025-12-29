@@ -452,61 +452,63 @@ const availableContainers = availableItems
 <template>
   <div class="space-y-6">
     <!-- 统计卡片 -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <div class="card p-4">
-        <div class="flex items-center gap-3">
-          <div class="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
-            <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div class="grid grid-cols-3 gap-2 sm:gap-4">
+      <div class="card p-3 sm:p-4">
+        <div class="flex items-center gap-2 sm:gap-3">
+          <div class="p-1.5 sm:p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+            <svg class="w-4 h-4 sm:w-5 sm:h-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
           </div>
           <div>
-            <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ stats.total }}</p>
-            <p class="text-sm text-gray-500 dark:text-gray-400">总群组</p>
+            <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{{ stats.total }}</p>
+            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">总群组</p>
           </div>
         </div>
       </div>
-      <div class="card p-4">
-        <div class="flex items-center gap-3">
-          <div class="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-            <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div class="card p-3 sm:p-4">
+        <div class="flex items-center gap-2 sm:gap-3">
+          <div class="p-1.5 sm:p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+            <svg class="w-4 h-4 sm:w-5 sm:h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <div>
-            <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ stats.enabled }}</p>
-            <p class="text-sm text-gray-500 dark:text-gray-400">已启用</p>
+            <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{{ stats.enabled }}</p>
+            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">已启用</p>
           </div>
         </div>
       </div>
-      <div class="card p-4">
-        <div class="flex items-center gap-3">
-          <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
-            <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div class="card p-3 sm:p-4">
+        <div class="flex items-center gap-2 sm:gap-3">
+          <div class="p-1.5 sm:p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+            <svg class="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
             </svg>
           </div>
           <div>
-            <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ stats.disabled }}</p>
-            <p class="text-sm text-gray-500 dark:text-gray-400">已禁用</p>
+            <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{{ stats.disabled }}</p>
+            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">已禁用</p>
           </div>
         </div>
       </div>
     </div>
 
     <!-- 工具栏 -->
-    <div class="flex flex-wrap items-center justify-between gap-4">
-      <button @click="openCreateModal" class="btn-primary">
-        <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div class="flex items-center justify-between gap-2">
+      <button @click="openCreateModal" class="btn btn-primary btn-sm sm:btn">
+        <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
-        新建群组
+        <span class="hidden sm:inline ml-2">新建群组</span>
+        <span class="sm:hidden ml-1">新建</span>
       </button>
-      <button @click="openHistoryModal" class="btn-secondary">
-        <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <button @click="openHistoryModal" class="btn btn-secondary btn-sm sm:btn">
+        <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        更新历史
+        <span class="hidden sm:inline ml-2">更新历史</span>
+        <span class="sm:hidden ml-1">历史</span>
       </button>
     </div>
 
@@ -524,24 +526,24 @@ const availableContainers = availableItems
       <button @click="openCreateModal" class="btn-primary">创建第一个群组</button>
     </div>
 
-    <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div v-for="group in groupsStore.groups" :key="group.id" class="card p-5">
-        <div class="flex items-start justify-between mb-4">
-          <div>
+    <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+      <div v-for="group in groupsStore.groups" :key="group.id" class="card p-3 sm:p-5">
+        <div class="flex items-start justify-between mb-3 sm:mb-4">
+          <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2 mb-1">
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ group.name }}</h3>
-              <span :class="['px-2 py-0.5 text-xs font-medium rounded', getGroupTypeColor(group.groupType || 'container')]">
+              <h3 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-white truncate">{{ group.name }}</h3>
+              <span :class="['px-1.5 sm:px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap flex-shrink-0', getGroupTypeColor(group.groupType || 'container')]">
                 {{ getGroupTypeLabel(group.groupType || 'container') }}
               </span>
             </div>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
-              优先级: {{ group.priority }} ·
-              <span v-if="group.cronExpr">定时: {{ group.cronExpr }}</span>
-              <span v-else>无定时任务</span>
+            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+              <span class="hidden sm:inline">优先级: {{ group.priority }} · </span>
+              <span v-if="group.cronExpr">{{ group.cronExpr }}</span>
+              <span v-else>无定时</span>
             </p>
           </div>
           <span :class="[
-            'px-2.5 py-1 text-xs font-medium rounded-full',
+            'px-2 py-0.5 sm:px-2.5 sm:py-1 text-xs font-medium rounded-full whitespace-nowrap flex-shrink-0 ml-2',
             group.enabled
               ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
               : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-400'
@@ -551,48 +553,80 @@ const availableContainers = availableItems
         </div>
 
         <!-- 群组配置信息 -->
-        <div class="flex flex-wrap gap-2 mb-4">
-          <span v-if="group.checkUpdate" class="px-2 py-1 text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded">
+        <div class="flex flex-wrap gap-1.5 sm:gap-2 mb-3 sm:mb-4">
+          <span v-if="group.checkUpdate" class="px-1.5 sm:px-2 py-0.5 sm:py-1 text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded">
             检查更新
           </span>
-          <span v-if="group.autoUpdate" class="px-2 py-1 text-xs bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 rounded">
+          <span v-if="group.autoUpdate" class="px-1.5 sm:px-2 py-0.5 sm:py-1 text-xs bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 rounded">
             自动更新
           </span>
         </div>
 
-        <!-- 操作按钮 -->
-        <div class="flex flex-wrap gap-2">
+        <!-- 操作按钮 - 移动端使用网格布局 -->
+        <div class="grid grid-cols-4 sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
           <button
             @click="openRuleModal(group)"
-            class="btn-sm btn-secondary"
+            class="btn btn-sm btn-secondary text-xs sm:text-sm px-2 sm:px-3"
+            title="规则管理"
           >
-            规则管理
+            <span class="hidden sm:inline">规则</span>
+            <svg class="w-4 h-4 sm:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
+            </svg>
           </button>
           <button
             @click="openAssignModal(group)"
-            class="btn-sm btn-secondary"
+            class="btn btn-sm btn-secondary text-xs sm:text-sm px-2 sm:px-3"
+            title="手动分配"
           >
-            手动分配
+            <span class="hidden sm:inline">分配</span>
+            <svg class="w-4 h-4 sm:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
           </button>
           <button
             @click="checkGroup(group)"
             :disabled="operatingIds.has(group.id)"
-            class="btn-sm btn-secondary"
+            class="btn btn-sm btn-secondary text-xs sm:text-sm px-2 sm:px-3"
+            title="检查更新"
           >
-            检查更新
+            <span class="hidden sm:inline">检查</span>
+            <svg class="w-4 h-4 sm:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
           </button>
           <button
             @click="triggerUpdate(group)"
             :disabled="operatingIds.has(group.id)"
-            class="btn-sm btn-warning"
+            class="btn btn-sm btn-warning text-xs sm:text-sm px-2 sm:px-3"
+            title="立即更新"
           >
-            立即更新
+            <span class="hidden sm:inline">更新</span>
+            <svg class="w-4 h-4 sm:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
           </button>
-          <button @click="openEditModal(group)" class="btn-sm btn-secondary">编辑</button>
-          <button @click="toggleGroup(group)" class="btn-sm" :class="group.enabled ? 'btn-gray' : 'btn-success'">
-            {{ group.enabled ? '禁用' : '启用' }}
+          <button @click="openEditModal(group)" class="btn btn-sm btn-secondary text-xs sm:text-sm px-2 sm:px-3" title="编辑">
+            <span class="hidden sm:inline">编辑</span>
+            <svg class="w-4 h-4 sm:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
           </button>
-          <button @click="deleteGroup(group)" class="btn-sm btn-danger">删除</button>
+          <button @click="toggleGroup(group)" class="btn btn-sm text-xs sm:text-sm px-2 sm:px-3" :class="group.enabled ? 'btn-ghost' : 'btn-success'" :title="group.enabled ? '禁用' : '启用'">
+            <span class="hidden sm:inline">{{ group.enabled ? '禁用' : '启用' }}</span>
+            <svg v-if="group.enabled" class="w-4 h-4 sm:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+            <svg v-else class="w-4 h-4 sm:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+          <button @click="deleteGroup(group)" class="btn btn-sm btn-danger text-xs sm:text-sm px-2 sm:px-3 col-span-2 sm:col-span-1" title="删除">
+            <span class="hidden sm:inline">删除</span>
+            <svg class="w-4 h-4 sm:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -917,35 +951,35 @@ const availableContainers = availableItems
 }
 
 .btn-primary {
-  @apply inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium;
+  @apply inline-flex items-center justify-center px-3 sm:px-4 py-1.5 sm:py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium text-sm sm:text-base;
 }
 
 .btn-secondary {
-  @apply inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium;
+  @apply inline-flex items-center justify-center px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium text-sm sm:text-base;
 }
 
 .btn-warning {
-  @apply inline-flex items-center px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium;
+  @apply inline-flex items-center justify-center px-3 sm:px-4 py-1.5 sm:py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium text-sm sm:text-base;
 }
 
 .btn-danger {
-  @apply inline-flex items-center px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium;
+  @apply inline-flex items-center justify-center px-3 sm:px-4 py-1.5 sm:py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium text-sm sm:text-base;
 }
 
 .btn-success {
-  @apply inline-flex items-center px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium;
+  @apply inline-flex items-center justify-center px-3 sm:px-4 py-1.5 sm:py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium text-sm sm:text-base;
 }
 
 .btn-gray {
-  @apply inline-flex items-center px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors font-medium;
+  @apply inline-flex items-center justify-center px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors font-medium text-sm sm:text-base;
 }
 
 .btn-sm {
-  @apply px-3 py-1.5 text-sm;
+  @apply px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm;
 }
 
 .input {
-  @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm sm:text-base;
 }
 
 .checkbox {
@@ -953,11 +987,11 @@ const availableContainers = availableItems
 }
 
 .modal-overlay {
-  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4;
+  @apply fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4;
 }
 
 .modal-content {
-  @apply bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto;
+  @apply bg-white dark:bg-gray-800 rounded-t-xl sm:rounded-xl shadow-xl p-4 sm:p-6 w-full sm:max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto;
 }
 
 .loading-spinner {

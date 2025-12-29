@@ -205,53 +205,55 @@ onMounted(() => {
     </div>
 
     <!-- 搜索和过滤栏 -->
-    <div class="card p-4">
-      <div class="flex flex-col sm:flex-row gap-4">
+    <div class="card p-3 sm:p-4">
+      <div class="flex flex-col gap-3 sm:gap-4">
         <!-- 搜索框 -->
-        <div class="relative flex-1">
+        <div class="relative">
           <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="搜索镜像名称或标签..."
-            class="input pl-10"
+            placeholder="搜索镜像..."
+            class="input pl-10 text-sm sm:text-base"
           />
         </div>
 
-        <!-- 类型过滤 -->
-        <div class="flex gap-2">
+        <!-- 类型过滤和刷新按钮 -->
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-thin">
+            <button
+              v-for="type in [
+                { value: 'all', label: '全部' },
+                { value: 'used', label: '使用中' },
+                { value: 'unused', label: '未使用' }
+              ]"
+              :key="type.value"
+              @click="filterType = type.value"
+              :class="[
+                'px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap flex-shrink-0',
+                filterType === type.value
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              ]"
+            >
+              {{ type.label }}
+            </button>
+          </div>
+
+          <!-- 刷新按钮 -->
           <button
-            v-for="type in [
-              { value: 'all', label: '全部' },
-              { value: 'used', label: '使用中' },
-              { value: 'unused', label: '未使用' }
-            ]"
-            :key="type.value"
-            @click="filterType = type.value"
-            :class="[
-              'px-4 py-2 rounded-lg text-sm font-medium transition-all',
-              filterType === type.value
-                ? 'bg-primary-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-            ]"
+            @click="imagesStore.fetchImages()"
+            :disabled="imagesStore.loading"
+            class="btn btn-secondary btn-sm sm:btn flex-shrink-0"
           >
-            {{ type.label }}
+            <svg :class="['w-4 h-4 sm:w-5 sm:h-5', imagesStore.loading && 'animate-spin']" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span class="hidden sm:inline">刷新</span>
           </button>
         </div>
-
-        <!-- 刷新按钮 -->
-        <button
-          @click="imagesStore.fetchImages()"
-          :disabled="imagesStore.loading"
-          class="btn btn-secondary"
-        >
-          <svg :class="['w-5 h-5', imagesStore.loading && 'animate-spin']" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          刷新
-        </button>
       </div>
     </div>
 

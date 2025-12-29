@@ -374,53 +374,55 @@ onMounted(() => {
     </div>
 
     <!-- 搜索和过滤栏 -->
-    <div class="card p-4">
-      <div class="flex flex-col sm:flex-row gap-4">
+    <div class="card p-3 sm:p-4">
+      <div class="flex flex-col gap-3 sm:gap-4">
         <!-- 搜索框 -->
-        <div class="relative flex-1">
+        <div class="relative">
           <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="搜索容器名称、镜像或 Compose 项目..."
-            class="input pl-10"
+            placeholder="搜索容器..."
+            class="input pl-10 text-sm sm:text-base"
           />
         </div>
 
-        <!-- 状态过滤 -->
-        <div class="flex gap-2">
+        <!-- 状态过滤和刷新按钮 -->
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-thin">
+            <button
+              v-for="status in [
+                { value: 'all', label: '全部' },
+                { value: 'running', label: '运行中' },
+                { value: 'stopped', label: '已停止' }
+              ]"
+              :key="status.value"
+              @click="filterStatus = status.value"
+              :class="[
+                'px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap flex-shrink-0',
+                filterStatus === status.value
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              ]"
+            >
+              {{ status.label }}
+            </button>
+          </div>
+
+          <!-- 刷新按钮 -->
           <button
-            v-for="status in [
-              { value: 'all', label: '全部' },
-              { value: 'running', label: '运行中' },
-              { value: 'stopped', label: '已停止' }
-            ]"
-            :key="status.value"
-            @click="filterStatus = status.value"
-            :class="[
-              'px-4 py-2 rounded-lg text-sm font-medium transition-all',
-              filterStatus === status.value
-                ? 'bg-primary-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-            ]"
+            @click="containersStore.fetchContainers()"
+            :disabled="containersStore.loading"
+            class="btn btn-secondary btn-sm sm:btn flex-shrink-0"
           >
-            {{ status.label }}
+            <svg :class="['w-4 h-4 sm:w-5 sm:h-5', containersStore.loading && 'animate-spin']" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span class="hidden sm:inline">刷新</span>
           </button>
         </div>
-
-        <!-- 刷新按钮 -->
-        <button
-          @click="containersStore.fetchContainers()"
-          :disabled="containersStore.loading"
-          class="btn btn-secondary"
-        >
-          <svg :class="['w-5 h-5', containersStore.loading && 'animate-spin']" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          刷新
-        </button>
       </div>
     </div>
 
@@ -447,52 +449,60 @@ onMounted(() => {
       <p class="text-gray-500 dark:text-gray-400">没有找到容器</p>
     </div>
 
-    <div v-else class="grid gap-4">
+    <div v-else class="grid gap-3 sm:gap-4">
       <div
         v-for="container in filteredContainers"
         :key="container.id"
-        class="card card-hover p-5 animate-fade-in"
+        class="card card-hover p-3 sm:p-5 animate-fade-in"
       >
-        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+        <div class="flex flex-col gap-3">
           <!-- 容器信息 -->
           <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-3 mb-2">
+            <!-- 容器名和状态 -->
+            <div class="flex items-center gap-2 sm:gap-3 mb-2">
               <!-- 状态指示器 -->
               <span
                 :class="[
-                  'w-3 h-3 rounded-full flex-shrink-0',
+                  'w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full flex-shrink-0',
                   container.status?.toLowerCase() === 'running' ? 'bg-emerald-500 animate-pulse-soft' : 'bg-gray-400'
                 ]"
               ></span>
               <!-- 容器名 -->
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white truncate">
+              <h3 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-white truncate">
                 {{ container.name }}
               </h3>
+            </div>
+
+            <!-- 标签组 - 移动端可横向滚动 -->
+            <div class="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1.5 -mb-1.5 scrollbar-thin">
               <!-- 状态标签 -->
-              <span :class="['badge', getStatusBadge(container.status).class]">
+              <span :class="['badge text-xs whitespace-nowrap flex-shrink-0', getStatusBadge(container.status).class]">
                 {{ getStatusBadge(container.status).text }}
               </span>
               <!-- 更新标签 -->
-              <span v-if="container.haveUpdate" class="badge badge-warning">
+              <span v-if="container.haveUpdate" class="badge badge-warning text-xs whitespace-nowrap flex-shrink-0">
                 有更新
               </span>
               <!-- 自身容器标签 -->
-              <span v-if="container.isSelf" class="badge badge-info">
+              <span v-if="container.isSelf" class="badge badge-info text-xs whitespace-nowrap flex-shrink-0">
                 本服务
               </span>
               <!-- Compose 标签 -->
-              <span v-if="container.composeProject" class="badge badge-purple" :title="`Compose: ${container.composeProject}/${container.composeService}`">
-                {{ container.composeProject }}/{{ container.composeService }}
+              <span v-if="container.composeProject" class="badge badge-purple text-xs whitespace-nowrap flex-shrink-0" :title="`Compose: ${container.composeProject}/${container.composeService}`">
+                {{ container.composeProject }}
               </span>
             </div>
 
-            <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
-              <div class="flex items-center gap-1.5">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <span class="truncate max-w-[200px]">{{ container.usingImage }}</span>
-              </div>
+            <!-- 镜像信息 - 始终显示 -->
+            <div class="mt-2 flex items-center gap-1.5 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+              <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span class="truncate">{{ container.usingImage }}</span>
+            </div>
+
+            <!-- 时间信息 - 仅在较大屏幕显示 -->
+            <div class="hidden sm:flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-500 dark:text-gray-400">
               <div class="flex items-center gap-1.5">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -508,52 +518,52 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- 操作按钮 -->
-          <div class="flex items-center gap-2 flex-shrink-0">
+          <!-- 操作按钮 - 移动端紧凑布局 -->
+          <div class="flex items-center gap-1.5 sm:gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
             <template v-if="container.status?.toLowerCase() === 'running'">
               <button
                 @click="handleAction(container, 'stop')"
                 :disabled="operatingIds.has(container.id)"
-                class="btn btn-sm btn-ghost text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                class="btn btn-sm btn-ghost text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 px-2 sm:px-3"
                 title="停止"
               >
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
                 </svg>
-                停止
+                <span class="hidden sm:inline">停止</span>
               </button>
               <button
                 @click="handleAction(container, 'restart')"
                 :disabled="operatingIds.has(container.id)"
-                class="btn btn-sm btn-ghost text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                class="btn btn-sm btn-ghost text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 px-2 sm:px-3"
                 title="重启"
               >
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                重启
+                <span class="hidden sm:inline">重启</span>
               </button>
             </template>
             <template v-else>
               <button
                 @click="handleAction(container, 'start')"
                 :disabled="operatingIds.has(container.id)"
-                class="btn btn-sm btn-success"
+                class="btn btn-sm btn-success px-2 sm:px-3"
                 title="启动"
               >
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                启动
+                <span class="hidden sm:inline">启动</span>
               </button>
             </template>
 
             <button
               @click="openRenameModal(container)"
               :disabled="operatingIds.has(container.id)"
-              class="btn btn-sm btn-ghost"
+              class="btn btn-sm btn-ghost px-2"
               title="重命名"
             >
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -564,7 +574,7 @@ onMounted(() => {
             <button
               @click="openGroupModal(container)"
               :disabled="operatingIds.has(container.id)"
-              class="btn btn-sm btn-ghost text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+              class="btn btn-sm btn-ghost text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 px-2"
               title="加入群组"
             >
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -576,13 +586,13 @@ onMounted(() => {
               v-if="container.haveUpdate"
               @click="openUpdateModal(container)"
               :disabled="operatingIds.has(container.id)"
-              class="btn btn-sm btn-warning"
+              class="btn btn-sm btn-warning px-2 sm:px-3 ml-auto"
               title="更新"
             >
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
-              更新
+              <span class="hidden sm:inline">更新</span>
             </button>
           </div>
         </div>
