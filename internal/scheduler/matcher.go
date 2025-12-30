@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/xcz1997/dockerCopilot/internal/model"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -21,6 +22,17 @@ type MatchedContainer struct {
 	State     string            `json:"state"`
 	MatchType string            `json:"matchType"` // rule 或 manual
 	RuleID    *int64            `json:"ruleId"`    // 匹配的规则ID
+}
+
+// MatchedImage 匹配到的镜像信息
+type MatchedImage struct {
+	ID        string   `json:"id"`        // 镜像ID
+	Name      string   `json:"name"`      // 镜像名称 (如 nginx)
+	Tag       string   `json:"tag"`       // 镜像标签 (如 latest)
+	FullName  string   `json:"fullName"`  // 完整名称 (如 nginx:latest)
+	RepoTags  []string `json:"repoTags"`  // 所有标签
+	Size      int64    `json:"size"`      // 镜像大小
+	MatchType string   `json:"matchType"` // manual
 }
 
 // Matcher 容器匹配器
@@ -289,6 +301,98 @@ func (m *Matcher) PreviewRuleMatches(ctx context.Context, ruleType model.RuleTyp
 				Labels:  c.Labels,
 				State:   c.State,
 			})
+		}
+	}
+
+	return matched, nil
+}
+
+// GetMatchedImages 获取群组匹配的所有镜像（用于镜像类型群组）
+func (m *Matcher) GetMatchedImages(ctx context.Context, groupID int64) ([]MatchedImage, error) {
+	// 获取所有 Docker 镜像
+	images, err := m.dockerClient.ImageList(ctx, image.ListOptions{All: false})
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取手动分配的镜像
+	manualImages, err := model.GetContainersByGroupID(groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 构建手动分配的镜像ID映射和名称映射
+	manualMapByID := make(map[string]bool)
+	manualMapByName := make(map[string]bool)
+	for _, mi := range manualImages {
+		manualMapByID[mi.ContainerID] = true
+		if mi.ContainerName != "" {
+			manualMapByName[mi.ContainerName] = true
+		}
+	}
+
+	var matched []MatchedImage
+	matchedIDs := make(map[string]bool)
+
+	for _, img := range images {
+		// 跳过无效镜像
+		if len(img.RepoTags) == 0 && len(img.RepoDigests) == 0 {
+			continue
+		}
+
+		// 解析镜像名称和标签
+		var imageName, imageTag, fullName string
+		if len(img.RepoTags) > 0 && img.RepoTags[0] != "<none>:<none>" {
+			fullName = img.RepoTags[0]
+			parts := strings.Split(fullName, ":")
+			imageName = parts[0]
+			if len(parts) > 1 {
+				imageTag = parts[1]
+			}
+		} else if len(img.RepoDigests) > 0 {
+			// 从 digest 提取镜像名
+			digest := img.RepoDigests[0]
+			if idx := strings.Index(digest, "@"); idx > 0 {
+				imageName = digest[:idx]
+				imageTag = "latest"
+				fullName = imageName + ":latest"
+			}
+		}
+
+		if imageName == "" {
+			continue
+		}
+
+		// 检查是否手动分配（按ID匹配）
+		if manualMapByID[img.ID] {
+			matched = append(matched, MatchedImage{
+				ID:        img.ID,
+				Name:      imageName,
+				Tag:       imageTag,
+				FullName:  fullName,
+				RepoTags:  img.RepoTags,
+				Size:      img.Size,
+				MatchType: "manual",
+			})
+			matchedIDs[img.ID] = true
+			continue
+		}
+
+		// 检查是否手动分配（按名称匹配）
+		if manualMapByName[fullName] || manualMapByName[imageName] {
+			if !matchedIDs[img.ID] {
+				logx.Infof("镜像[%s]通过名称匹配", fullName)
+				matched = append(matched, MatchedImage{
+					ID:        img.ID,
+					Name:      imageName,
+					Tag:       imageTag,
+					FullName:  fullName,
+					RepoTags:  img.RepoTags,
+					Size:      img.Size,
+					MatchType: "manual",
+				})
+				matchedIDs[img.ID] = true
+			}
 		}
 	}
 

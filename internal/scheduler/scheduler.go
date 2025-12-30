@@ -372,9 +372,22 @@ func (s *GroupScheduler) executeGroupUpdateWithProgress(groupID int64, taskID st
 	}
 
 	taskName = fmt.Sprintf("群组更新: %s", group.Name)
+
+	// 根据群组类型执行不同的更新逻辑
+	switch group.GroupType {
+	case model.GroupTypeImage:
+		s.executeImageGroupUpdate(group, taskID, taskName, groupIDStr)
+	default:
+		// container 和 project 类型都使用容器更新逻辑
+		s.executeContainerGroupUpdate(group, taskID, taskName, groupIDStr)
+	}
+}
+
+// executeContainerGroupUpdate 执行容器群组更新
+func (s *GroupScheduler) executeContainerGroupUpdate(group *model.ContainerGroup, taskID, taskName, groupIDStr string) {
 	s.updateProgressWithMeta(taskID, 5, "开始更新群组", taskName, "正在获取匹配的容器", false, "group_update", groupIDStr, group.Name)
 
-	containers, err := s.getMatchedContainers(groupID)
+	containers, err := s.getMatchedContainers(group.ID)
 	if err != nil {
 		logx.Errorf("获取群组[%s]容器失败: %v", group.Name, err)
 		s.updateProgressWithMeta(taskID, 0, "获取容器失败", taskName, err.Error(), true, "group_update", groupIDStr, group.Name)
@@ -450,10 +463,95 @@ func (s *GroupScheduler) executeGroupUpdateWithProgress(groupID int64, taskID st
 	module.NotifyGroupTaskCompleteWithDetails(group.Name, "update", updated, skipped, failed, taskDetails)
 }
 
+// executeImageGroupUpdate 执行镜像群组更新
+func (s *GroupScheduler) executeImageGroupUpdate(group *model.ContainerGroup, taskID, taskName, groupIDStr string) {
+	s.updateProgressWithMeta(taskID, 5, "开始更新群组", taskName, "正在获取匹配的镜像", false, "group_update", groupIDStr, group.Name)
+
+	images, err := s.getMatchedImages(group.ID)
+	if err != nil {
+		logx.Errorf("获取群组[%s]镜像失败: %v", group.Name, err)
+		s.updateProgressWithMeta(taskID, 0, "获取镜像失败", taskName, err.Error(), true, "group_update", groupIDStr, group.Name)
+		return
+	}
+
+	if len(images) == 0 {
+		s.updateProgressWithMeta(taskID, 100, "完成", taskName, "没有匹配的镜像", true, "group_update", groupIDStr, group.Name)
+		return
+	}
+
+	total := len(images)
+	updated := 0
+	failed := 0
+	skipped := 0
+	var taskDetails []module.TaskDetail
+
+	s.updateProgress(taskID, 10, fmt.Sprintf("找到 %d 个镜像", total), taskName, "开始更新", false)
+
+	executor := NewExecutor(s.dockerClient, s.hubImageInfo)
+
+	for i, img := range images {
+		progress := 10 + (i+1)*80/total
+		s.updateProgress(taskID, progress, fmt.Sprintf("更新 %s (%d/%d)", img.FullName, i+1, total), taskName, "", false)
+
+		// 更新子任务状态
+		imageName := img.FullName // 捕获变量
+		s.updateSubTaskWithProgress(taskID, imageName, "in_progress", "检查更新", "正在检查是否有可用更新...", 5)
+
+		// 检查镜像是否有更新
+		hasUpdate, err := executor.CheckImageUpdate(context.Background(), img)
+		if err != nil {
+			logx.Errorf("检查镜像[%s]更新失败: %v", img.FullName, err)
+			s.updateSubTaskWithProgress(taskID, imageName, "failed", "检查失败", err.Error(), 100)
+			taskDetails = append(taskDetails, module.TaskDetail{Name: img.FullName, Status: "failed", Message: "检查失败"})
+			failed++
+			continue
+		}
+
+		if !hasUpdate {
+			s.updateSubTaskWithProgress(taskID, imageName, "completed", "已是最新", "当前版本已是最新，无需更新", 100)
+			skipped++
+			continue
+		}
+
+		// 创建进度回调
+		onProgress := func(pct int, msg, detail string) {
+			s.updateSubTaskWithProgress(taskID, imageName, "in_progress", msg, detail, pct)
+		}
+
+		// 拉取新镜像
+		err = executor.PullImageWithProgress(context.Background(), img, onProgress)
+		if err != nil {
+			logx.Errorf("镜像[%s]更新失败: %v", img.FullName, err)
+			s.updateSubTaskWithProgress(taskID, imageName, "failed", "更新失败", err.Error(), 100)
+			taskDetails = append(taskDetails, module.TaskDetail{Name: img.FullName, Status: "failed", Message: err.Error()})
+			failed++
+			continue
+		}
+
+		logx.Infof("镜像[%s]更新成功", img.FullName)
+		s.updateSubTaskWithProgress(taskID, imageName, "completed", "更新成功", "镜像已成功更新到最新版本", 100)
+		taskDetails = append(taskDetails, module.TaskDetail{Name: img.FullName, Status: "updated"})
+		updated++
+	}
+
+	summary := fmt.Sprintf("更新: %d, 跳过: %d, 失败: %d", updated, skipped, failed)
+	s.updateProgressWithMeta(taskID, 100, "更新完成", taskName, summary, true, "group_update", groupIDStr, group.Name)
+	logx.Infof("群组[%s]镜像更新完成: %s", group.Name, summary)
+
+	// 发送 Bark 通知
+	module.NotifyGroupTaskCompleteWithDetails(group.Name, "update", updated, skipped, failed, taskDetails)
+}
+
 // getMatchedContainers 获取匹配群组的容器
 func (s *GroupScheduler) getMatchedContainers(groupID int64) ([]MatchedContainer, error) {
 	matcher := NewMatcher(s.dockerClient)
 	return matcher.GetMatchedContainers(context.Background(), groupID)
+}
+
+// getMatchedImages 获取匹配群组的镜像
+func (s *GroupScheduler) getMatchedImages(groupID int64) ([]MatchedImage, error) {
+	matcher := NewMatcher(s.dockerClient)
+	return matcher.GetMatchedImages(context.Background(), groupID)
 }
 
 // checkOnly 仅检查更新，返回是否有更新

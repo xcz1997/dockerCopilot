@@ -313,3 +313,83 @@ func (e *Executor) UpdateWithProgress(ctx context.Context, mc MatchedContainer, 
 	logx.Infof("容器[%s]更新完成", oldName)
 	return result, nil
 }
+
+// CheckImageUpdate 检查镜像是否有更新
+func (e *Executor) CheckImageUpdate(ctx context.Context, img MatchedImage) (bool, error) {
+	// 优先使用 hubImageInfo 中已检测的结果
+	if e.hubImageInfo != nil {
+		if info, ok := e.hubImageInfo.GetImageCheck(img.ID); ok {
+			logx.Infof("镜像[%s]使用缓存的更新状态: needUpdate=%v", img.FullName, info.NeedUpdate)
+			return info.NeedUpdate, nil
+		}
+		if info, ok := e.hubImageInfo.GetImageCheckByName(img.FullName); ok {
+			logx.Infof("镜像[%s]使用缓存的更新状态(按名称): needUpdate=%v", img.FullName, info.NeedUpdate)
+			return info.NeedUpdate, nil
+		}
+	}
+
+	// 缓存中没有，则实际拉取检查
+	logx.Infof("镜像[%s]缓存中无更新状态，开始拉取检查", img.FullName)
+
+	// 获取本地镜像信息
+	localInspect, _, err := e.dockerClient.ImageInspectWithRaw(ctx, img.ID)
+	if err != nil {
+		return false, fmt.Errorf("获取本地镜像信息失败: %w", err)
+	}
+
+	// 拉取远程镜像
+	pullOut, err := e.dockerClient.ImagePull(ctx, img.FullName, image.PullOptions{})
+	if err != nil {
+		return false, fmt.Errorf("拉取镜像失败: %w", err)
+	}
+	defer pullOut.Close()
+	_, _ = io.Copy(io.Discard, pullOut)
+
+	// 重新获取镜像信息
+	remoteInspect, _, err := e.dockerClient.ImageInspectWithRaw(ctx, img.FullName)
+	if err != nil {
+		return false, fmt.Errorf("获取远程镜像信息失败: %w", err)
+	}
+
+	hasUpdate := localInspect.ID != remoteInspect.ID
+	logx.Infof("镜像[%s]检查: 本地=%s, 远程=%s, 有更新=%v",
+		img.FullName, localInspect.ID[:12], remoteInspect.ID[:12], hasUpdate)
+
+	return hasUpdate, nil
+}
+
+// PullImageWithProgress 拉取镜像（带进度回调）
+func (e *Executor) PullImageWithProgress(ctx context.Context, img MatchedImage, onProgress ProgressCallback) error {
+	reportProgress := func(pct int, msg, detail string) {
+		if onProgress != nil {
+			onProgress(pct, msg, detail)
+		}
+	}
+
+	reportProgress(10, "开始拉取", fmt.Sprintf("正在拉取镜像 %s", img.FullName))
+
+	pullOut, err := e.dockerClient.ImagePull(ctx, img.FullName, image.PullOptions{})
+	if err != nil {
+		return fmt.Errorf("拉取镜像失败: %w", err)
+	}
+	defer pullOut.Close()
+
+	// 读取拉取进度
+	buf := make([]byte, 1024)
+	for {
+		n, readErr := pullOut.Read(buf)
+		if n > 0 {
+			reportProgress(50, "拉取中", "正在下载镜像层...")
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			break
+		}
+	}
+
+	reportProgress(100, "拉取完成", "镜像更新成功")
+	logx.Infof("镜像[%s]拉取完成", img.FullName)
+	return nil
+}
