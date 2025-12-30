@@ -58,6 +58,27 @@ function getSubTaskProgress(subTask) {
   return 0
 }
 
+// 检测是否为"已是最新"状态（无需更新）
+function isSkippedTask(subTask) {
+  if (subTask.status === 'skipped') return true
+  const msg = (subTask.message || '').toLowerCase()
+  return msg.includes('已是最新') || msg.includes('无需更新') || msg.includes('跳过')
+}
+
+// 获取子任务排序优先级：失败(0) > 成功(1) > 进行中(2) > 已是最新/跳过(3)
+function getSubTaskSortPriority(subTask) {
+  if (subTask.status === 'failed') return 0
+  if (subTask.status === 'completed' && !isSkippedTask(subTask)) return 1
+  if (subTask.status === 'in_progress') return 2
+  return 3 // 已是最新、跳过、pending等
+}
+
+// 对子任务进行排序
+function sortedSubTasks(subTasks) {
+  if (!subTasks) return []
+  return [...subTasks].sort((a, b) => getSubTaskSortPriority(a) - getSubTaskSortPriority(b))
+}
+
 function toggleExpand(taskId) {
   if (expandedTasks.value.has(taskId)) {
     expandedTasks.value.delete(taskId)
@@ -344,9 +365,12 @@ onUnmounted(() => {
             </h4>
             <div class="space-y-3">
               <div
-                v-for="(subTask, index) in task.subTasks"
+                v-for="(subTask, index) in sortedSubTasks(task.subTasks)"
                 :key="index"
-                class="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
+                :class="[
+                  'p-3 rounded-lg',
+                  isSkippedTask(subTask) ? 'bg-gray-50/50 dark:bg-gray-800/30 opacity-60' : 'bg-gray-50 dark:bg-gray-800/50'
+                ]"
               >
                 <div class="flex items-center justify-between mb-2">
                   <div class="flex items-center gap-3">
@@ -366,9 +390,13 @@ onUnmounted(() => {
                     </div>
 
                     <div class="min-w-0 flex-1">
-                      <p class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{{ subTask.name }}</p>
+                      <p :class="[
+                        'text-sm truncate',
+                        isSkippedTask(subTask) ? 'font-normal text-gray-500 dark:text-gray-500' : 'font-medium text-gray-800 dark:text-gray-200'
+                      ]">{{ subTask.name }}</p>
                       <p :class="[
                         'text-xs truncate',
+                        isSkippedTask(subTask) ? 'text-gray-400 dark:text-gray-500' :
                         subTask.status === 'completed' ? 'font-bold text-emerald-600 dark:text-emerald-400' :
                         subTask.status === 'failed' ? 'font-bold text-red-600 dark:text-red-400' :
                         getSubTaskStatusClass(subTask.status)
@@ -379,6 +407,7 @@ onUnmounted(() => {
                   <div class="flex items-center gap-3 flex-shrink-0">
                     <!-- 子任务进度百分比 -->
                     <span
+                      v-if="!isSkippedTask(subTask)"
                       :class="[
                         'text-xs font-semibold px-2 py-0.5 rounded',
                         subTask.status === 'completed' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' :
@@ -389,6 +418,12 @@ onUnmounted(() => {
                     >
                       {{ getSubTaskProgress(subTask) }}%
                     </span>
+                    <span
+                      v-else
+                      class="text-xs text-gray-400 dark:text-gray-500"
+                    >
+                      --
+                    </span>
                     <div class="text-xs text-gray-500 dark:text-gray-400 text-right hidden sm:block">
                       <p v-if="subTask.startedAt">开始: {{ subTask.startedAt }}</p>
                       <p v-if="subTask.finishedAt">完成: {{ subTask.finishedAt }}</p>
@@ -396,8 +431,8 @@ onUnmounted(() => {
                   </div>
                 </div>
 
-                <!-- 子任务进度条 - 所有状态都显示 -->
-                <div class="mt-2">
+                <!-- 子任务进度条 - 非跳过状态显示 -->
+                <div v-if="!isSkippedTask(subTask)" class="mt-2">
                   <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
                     <div
                       :class="[
