@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: 构建后端（在构建机器架构上交叉编译，避免 QEMU 模拟）
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
 
 ARG TARGETOS
 ARG TARGETARCH
