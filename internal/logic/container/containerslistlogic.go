@@ -2,12 +2,14 @@ package container
 
 import (
 	"context"
-	"github.com/xcz1997/dockerCopilot/internal/module"
-	"github.com/xcz1997/dockerCopilot/internal/utiles"
+	"strings"
 	"time"
 
+	"github.com/docker/docker/api/types/image"
+	"github.com/xcz1997/dockerCopilot/internal/module"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 	"github.com/xcz1997/dockerCopilot/internal/types"
+	"github.com/xcz1997/dockerCopilot/internal/utiles"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -51,6 +53,23 @@ func (l *ContainersListLogic) ContainersList() (resp *types.Resp, err error) {
 		resp.Data = map[string]interface{}{}
 		return resp, err
 	}
+
+	// 获取所有镜像，建立 ImageID 到镜像名称的映射
+	imageMap := make(map[string]string)
+	images, err := l.svcCtx.DockerClient.ImageList(l.ctx, image.ListOptions{})
+	if err == nil {
+		for _, img := range images {
+			if len(img.RepoTags) > 0 {
+				imageMap[img.ID] = img.RepoTags[0]
+			} else if len(img.RepoDigests) > 0 {
+				parts := strings.Split(img.RepoDigests[0], "@")
+				if len(parts) > 0 {
+					imageMap[img.ID] = parts[0] + ":latest"
+				}
+			}
+		}
+	}
+
 	resp.Code = 200
 	resp.Msg = "success"
 	var containerInfoList []Info
@@ -66,10 +85,13 @@ func (l *ContainersListLogic) ContainersList() (resp *types.Resp, err error) {
 			containerInfo.Name = "get container name error"
 			l.Error("get container name error" + v.ID)
 		}
-		if v.Image != "" {
+		// 获取镜像名称：优先使用 imageMap 中的完整名称
+		if mappedName, ok := imageMap[v.ImageID]; ok {
+			containerInfo.UsingImage = mappedName
+		} else if v.Image != "" && !strings.HasPrefix(v.Image, "sha256:") {
 			containerInfo.UsingImage = v.Image
 		} else {
-			containerInfo.UsingImage = v.ImageID
+			containerInfo.UsingImage = v.ImageID[:19] + "..."
 			l.Error("image dont have name" + v.ID)
 		}
 		containerInspect, err := utiles.GetContainerInspect(l.svcCtx, v.ID)
