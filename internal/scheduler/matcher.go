@@ -53,6 +53,22 @@ func (m *Matcher) GetMatchedContainers(ctx context.Context, groupID int64) ([]Ma
 		return nil, err
 	}
 
+	// 获取所有镜像，建立 ImageID 到镜像名称的映射
+	imageMap := make(map[string]string)
+	images, err := m.dockerClient.ImageList(ctx, image.ListOptions{})
+	if err == nil {
+		for _, img := range images {
+			if len(img.RepoTags) > 0 {
+				imageMap[img.ID] = img.RepoTags[0]
+			} else if len(img.RepoDigests) > 0 {
+				parts := strings.Split(img.RepoDigests[0], "@")
+				if len(parts) > 0 {
+					imageMap[img.ID] = parts[0] + ":latest"
+				}
+			}
+		}
+	}
+
 	// 获取群组规则
 	rules, err := model.GetRulesByGroupID(groupID)
 	if err != nil {
@@ -76,6 +92,20 @@ func (m *Matcher) GetMatchedContainers(ctx context.Context, groupID int64) ([]Ma
 		}
 	}
 
+	// 辅助函数：获取正确的镜像名称
+	getImageName := func(imageID, fallback string) string {
+		if name, ok := imageMap[imageID]; ok {
+			return name
+		}
+		if fallback != "" && !strings.HasPrefix(fallback, "sha256:") {
+			return fallback
+		}
+		if len(imageID) > 19 {
+			return imageID[:19] + "..."
+		}
+		return imageID
+	}
+
 	var matched []MatchedContainer
 	matchedIDs := make(map[string]bool)
 
@@ -86,7 +116,7 @@ func (m *Matcher) GetMatchedContainers(ctx context.Context, groupID int64) ([]Ma
 			matched = append(matched, MatchedContainer{
 				ID:        c.ID,
 				Name:      name,
-				Image:     c.Image,
+				Image:     getImageName(c.ImageID, c.Image),
 				ImageID:   c.ImageID,
 				Labels:    c.Labels,
 				State:     c.State,
@@ -107,7 +137,7 @@ func (m *Matcher) GetMatchedContainers(ctx context.Context, groupID int64) ([]Ma
 			matched = append(matched, MatchedContainer{
 				ID:        c.ID,
 				Name:      name,
-				Image:     c.Image,
+				Image:     getImageName(c.ImageID, c.Image),
 				ImageID:   c.ImageID,
 				Labels:    c.Labels,
 				State:     c.State,
@@ -125,15 +155,15 @@ func (m *Matcher) GetMatchedContainers(ctx context.Context, groupID int64) ([]Ma
 		}
 
 		name := strings.TrimPrefix(c.Names[0], "/")
-		image := c.Image
+		imageName := getImageName(c.ImageID, c.Image)
 
 		// 检查是否匹配任何规则
 		for _, rule := range rules {
-			if m.matchRule(rule, name, image, c.Labels) {
+			if m.matchRule(rule, name, imageName, c.Labels) {
 				matched = append(matched, MatchedContainer{
 					ID:        c.ID,
 					Name:      name,
-					Image:     image,
+					Image:     imageName,
 					ImageID:   c.ImageID,
 					Labels:    c.Labels,
 					State:     c.State,
@@ -282,6 +312,36 @@ func (m *Matcher) PreviewRuleMatches(ctx context.Context, ruleType model.RuleTyp
 		return nil, err
 	}
 
+	// 获取所有镜像，建立 ImageID 到镜像名称的映射
+	imageMap := make(map[string]string)
+	images, err := m.dockerClient.ImageList(ctx, image.ListOptions{})
+	if err == nil {
+		for _, img := range images {
+			if len(img.RepoTags) > 0 {
+				imageMap[img.ID] = img.RepoTags[0]
+			} else if len(img.RepoDigests) > 0 {
+				parts := strings.Split(img.RepoDigests[0], "@")
+				if len(parts) > 0 {
+					imageMap[img.ID] = parts[0] + ":latest"
+				}
+			}
+		}
+	}
+
+	// 辅助函数：获取正确的镜像名称
+	getImageName := func(imageID, fallback string) string {
+		if name, ok := imageMap[imageID]; ok {
+			return name
+		}
+		if fallback != "" && !strings.HasPrefix(fallback, "sha256:") {
+			return fallback
+		}
+		if len(imageID) > 19 {
+			return imageID[:19] + "..."
+		}
+		return imageID
+	}
+
 	rule := model.GroupRule{
 		RuleType: ruleType,
 		Pattern:  pattern,
@@ -290,13 +350,13 @@ func (m *Matcher) PreviewRuleMatches(ctx context.Context, ruleType model.RuleTyp
 	var matched []MatchedContainer
 	for _, c := range containers {
 		name := strings.TrimPrefix(c.Names[0], "/")
-		image := c.Image
+		imageName := getImageName(c.ImageID, c.Image)
 
-		if m.matchRule(rule, name, image, c.Labels) {
+		if m.matchRule(rule, name, imageName, c.Labels) {
 			matched = append(matched, MatchedContainer{
 				ID:      c.ID,
 				Name:    name,
-				Image:   image,
+				Image:   imageName,
 				ImageID: c.ImageID,
 				Labels:  c.Labels,
 				State:   c.State,
