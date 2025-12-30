@@ -78,7 +78,8 @@ function getImageFullName(image) {
 
 function openDeleteModal(image) {
   selectedImage.value = image
-  forceDelete.value = false
+  // 使用中的镜像默认勾选强制删除
+  forceDelete.value = image.inUsed
   showDeleteModal.value = true
 }
 
@@ -280,43 +281,47 @@ onMounted(() => {
       <p class="text-gray-500 dark:text-gray-400">没有找到镜像</p>
     </div>
 
-    <div v-else class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div v-else class="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
       <div
         v-for="image in filteredImages"
         :key="image.id"
-        class="card card-hover p-5 animate-fade-in"
+        class="card card-hover p-3 sm:p-5 animate-fade-in"
       >
         <div class="flex flex-col h-full">
           <!-- 镜像信息 -->
-          <div class="flex items-start gap-3 mb-4">
-            <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex-shrink-0">
-              <svg class="w-6 h-6 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div class="flex items-start gap-2 sm:gap-3 mb-3 sm:mb-4">
+            <div class="p-1.5 sm:p-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex-shrink-0">
+              <svg class="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
             <div class="flex-1 min-w-0">
-              <h3 class="font-semibold text-gray-900 dark:text-white truncate" :title="getImageFullName(image)">
+              <h3 class="text-sm sm:text-base font-semibold text-gray-900 dark:text-white truncate" :title="getImageFullName(image)">
                 {{ image.name || 'none' }}
               </h3>
-              <p class="text-sm text-gray-500 dark:text-gray-400">{{ image.tag || 'none' }}</p>
+              <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{{ image.tag || 'none' }}</p>
             </div>
-            <span :class="['badge', image.inUsed ? 'badge-success' : 'badge-gray']">
+          </div>
+
+          <!-- 标签组 - 移动端可横向滚动 -->
+          <div class="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1.5 -mb-1.5 scrollbar-thin mb-3 sm:mb-4">
+            <span :class="['badge text-xs whitespace-nowrap flex-shrink-0', image.inUsed ? 'badge-success' : 'badge-gray']">
               {{ image.inUsed ? '使用中' : '未使用' }}
             </span>
-            <span v-if="image.haveUpdate" class="badge badge-warning">
+            <span v-if="image.haveUpdate" class="badge badge-warning text-xs whitespace-nowrap flex-shrink-0">
               有更新
             </span>
           </div>
 
           <!-- 详细信息 -->
-          <div class="flex-1 space-y-2 text-sm">
+          <div class="flex-1 space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
             <div class="flex justify-between">
               <span class="text-gray-500 dark:text-gray-400">大小</span>
               <span class="font-medium text-gray-900 dark:text-white">{{ image.size || '-' }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-gray-500 dark:text-gray-400">创建时间</span>
-              <span class="font-medium text-gray-900 dark:text-white">{{ image.createTime || '-' }}</span>
+              <span class="font-medium text-gray-900 dark:text-white text-right">{{ image.createTime || '-' }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-gray-500 dark:text-gray-400">ID</span>
@@ -325,12 +330,12 @@ onMounted(() => {
           </div>
 
           <!-- 操作按钮 -->
-          <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex gap-2">
+          <div class="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-100 dark:border-gray-700 flex gap-1.5 sm:gap-2">
             <button
               v-if="image.haveUpdate"
               @click="openPullModal(image)"
               :disabled="pullingIds.has(image.id)"
-              class="btn btn-sm btn-warning flex-1"
+              class="btn btn-sm btn-warning flex-1 px-2 sm:px-3"
             >
               <svg v-if="pullingIds.has(image.id)" class="w-4 h-4 animate-spin" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
@@ -339,17 +344,26 @@ onMounted(() => {
               <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
-              更新镜像
+              <span class="hidden sm:inline">更新镜像</span>
+              <span class="sm:hidden">更新</span>
             </button>
             <button
               @click="openDeleteModal(image)"
               :disabled="deletingIds.has(image.id)"
-              :class="['btn btn-sm btn-ghost text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20', image.haveUpdate ? 'flex-1' : 'w-full']"
+              :class="[
+                'btn btn-sm px-2 sm:px-3',
+                image.haveUpdate ? 'flex-1' : 'w-full',
+                image.inUsed
+                  ? 'btn-ghost text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                  : 'btn-ghost text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20'
+              ]"
+              :title="image.inUsed ? '镜像正在使用中，删除需要强制模式' : '删除镜像'"
             >
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
-              删除镜像
+              <span class="hidden sm:inline">删除镜像</span>
+              <span class="sm:hidden">删除</span>
             </button>
           </div>
         </div>
@@ -373,18 +387,28 @@ onMounted(() => {
         </p>
 
         <div v-if="selectedImage?.inUsed" class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
-          <p class="text-sm text-amber-800 dark:text-amber-300">
-            此镜像正在被容器使用，需要强制删除。
+          <div class="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-medium mb-1">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>镜像正在使用中</span>
+          </div>
+          <p class="text-sm text-amber-700 dark:text-amber-400">
+            此镜像正在被容器使用，删除后可能影响相关容器运行。
           </p>
         </div>
 
-        <label class="flex items-center gap-2 mb-4">
+        <label :class="['flex items-center gap-2 mb-4', selectedImage?.inUsed ? 'opacity-60' : '']">
           <input
             type="checkbox"
             v-model="forceDelete"
-            class="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            :disabled="selectedImage?.inUsed"
+            class="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 disabled:cursor-not-allowed"
           />
-          <span class="text-sm text-gray-600 dark:text-gray-400">强制删除</span>
+          <span class="text-sm text-gray-600 dark:text-gray-400">
+            强制删除
+            <span v-if="selectedImage?.inUsed" class="text-amber-600 dark:text-amber-400">（使用中的镜像必须强制删除）</span>
+          </span>
         </label>
 
         <div class="flex justify-end gap-3">
