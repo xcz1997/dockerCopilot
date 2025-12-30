@@ -319,38 +319,65 @@ onUnmounted(() => {
             <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               子任务 ({{ task.subTasks.length }})
             </h4>
-            <div class="space-y-2">
+            <div class="space-y-3">
               <div
                 v-for="(subTask, index) in task.subTasks"
                 :key="index"
-                class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
+                class="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
               >
-                <div class="flex items-center gap-3">
-                  <!-- 子任务状态图标 -->
-                  <div class="flex-shrink-0">
-                    <svg v-if="subTask.status === 'completed'" class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                    <svg v-else-if="subTask.status === 'failed'" class="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    <svg v-else-if="subTask.status === 'in_progress'" class="w-4 h-4 text-blue-500 animate-spin" viewBox="0 0 24 24">
-                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
-                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    <div v-else class="w-4 h-4 rounded-full border-2 border-gray-300 dark:border-gray-600"></div>
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-3">
+                    <!-- 子任务状态图标 -->
+                    <div class="flex-shrink-0">
+                      <svg v-if="subTask.status === 'completed'" class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                      <svg v-else-if="subTask.status === 'failed'" class="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      <svg v-else-if="subTask.status === 'in_progress'" class="w-4 h-4 text-blue-500 animate-spin" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <div v-else class="w-4 h-4 rounded-full border-2 border-gray-300 dark:border-gray-600"></div>
+                    </div>
+
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{{ subTask.name }}</p>
+                      <p :class="['text-xs truncate', getSubTaskStatusClass(subTask.status)]">{{ subTask.message }}</p>
+                    </div>
                   </div>
 
-                  <div>
-                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ subTask.name }}</p>
-                    <p :class="['text-xs', getSubTaskStatusClass(subTask.status)]">{{ subTask.message }}</p>
+                  <div class="flex items-center gap-3 flex-shrink-0">
+                    <!-- 子任务进度百分比 -->
+                    <span v-if="subTask.status === 'in_progress' && subTask.percentage" class="text-xs font-medium text-blue-600 dark:text-blue-400">
+                      {{ subTask.percentage }}%
+                    </span>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 text-right hidden sm:block">
+                      <p v-if="subTask.startedAt">开始: {{ subTask.startedAt }}</p>
+                      <p v-if="subTask.finishedAt">完成: {{ subTask.finishedAt }}</p>
+                    </div>
                   </div>
                 </div>
 
-                <div class="text-xs text-gray-500 dark:text-gray-400 text-right">
-                  <p v-if="subTask.startedAt">开始: {{ subTask.startedAt }}</p>
-                  <p v-if="subTask.finishedAt">完成: {{ subTask.finishedAt }}</p>
+                <!-- 子任务进度条 -->
+                <div v-if="subTask.status === 'in_progress' && subTask.percentage" class="mt-2">
+                  <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      class="h-1.5 rounded-full bg-blue-500 transition-all duration-300"
+                      :style="{ width: `${subTask.percentage}%` }"
+                    ></div>
+                  </div>
+                  <p v-if="subTask.detailMsg" class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
+                    {{ subTask.detailMsg }}
+                  </p>
                 </div>
+
+                <!-- 完成或失败时显示详情 -->
+                <p v-else-if="subTask.detailMsg && (subTask.status === 'completed' || subTask.status === 'failed')"
+                   class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
+                  {{ subTask.detailMsg }}
+                </p>
               </div>
             </div>
           </div>

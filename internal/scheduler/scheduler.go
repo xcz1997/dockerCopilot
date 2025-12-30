@@ -19,6 +19,7 @@ type TaskProgressUpdater interface {
 	UpdateProgress(taskID string, percentage int, message string, name string, detailMsg string, isDone bool)
 	UpdateProgressWithMeta(taskID string, percentage int, message string, name string, detailMsg string, isDone bool, taskType string, targetID string, targetName string)
 	UpdateSubTask(taskID string, subTaskName string, status string, message string)
+	UpdateSubTaskWithProgress(taskID string, subTaskName string, status string, message string, detailMsg string, percentage int)
 }
 
 // GroupScheduler 群组调度器
@@ -81,6 +82,13 @@ func (s *GroupScheduler) updateProgressWithMeta(taskID string, percentage int, m
 func (s *GroupScheduler) updateSubTask(taskID string, subTaskName string, status string, message string) {
 	if s.progressUpdater != nil {
 		s.progressUpdater.UpdateSubTask(taskID, subTaskName, status, message)
+	}
+}
+
+// updateSubTaskWithProgress 更新子任务（带详细进度）
+func (s *GroupScheduler) updateSubTaskWithProgress(taskID string, subTaskName string, status string, message string, detailMsg string, percentage int) {
+	if s.progressUpdater != nil {
+		s.progressUpdater.UpdateSubTaskWithProgress(taskID, subTaskName, status, message, detailMsg, percentage)
 	}
 }
 
@@ -391,33 +399,37 @@ func (s *GroupScheduler) executeGroupUpdateWithProgress(groupID int64, taskID st
 		s.updateProgress(taskID, progress, fmt.Sprintf("更新 %s (%d/%d)", container.Name, i+1, total), taskName, "", false)
 
 		// 更新子任务状态
-		s.updateSubTask(taskID, container.Name, "in_progress", "检查更新中...")
+		s.updateSubTaskWithProgress(taskID, container.Name, "in_progress", "检查更新", "正在检查是否有可用更新...", 5)
 
 		executor := NewExecutor(s.dockerClient, s.hubImageInfo)
 		hasUpdate, err := executor.CheckUpdate(context.Background(), container)
 		if err != nil {
 			logx.Errorf("检查容器[%s]更新失败: %v", container.Name, err)
 			s.recordHistory(group.ID, container, "", "", model.UpdateStatusFailed, err.Error())
-			s.updateSubTask(taskID, container.Name, "failed", "检查失败: "+err.Error())
+			s.updateSubTaskWithProgress(taskID, container.Name, "failed", "检查失败", err.Error(), 100)
 			taskDetails = append(taskDetails, module.TaskDetail{Name: container.Name, Status: "failed", Message: "检查失败"})
 			failed++
 			continue
 		}
 
 		if !hasUpdate {
-			s.updateSubTask(taskID, container.Name, "completed", "已是最新")
+			s.updateSubTaskWithProgress(taskID, container.Name, "completed", "已是最新", "当前版本已是最新，无需更新", 100)
 			skipped++
 			continue
 		}
 
-		s.updateSubTask(taskID, container.Name, "in_progress", "正在更新...")
+		// 创建进度回调，用于报告子任务详细进度
+		containerName := container.Name // 捕获变量
+		onProgress := func(pct int, msg, detail string) {
+			s.updateSubTaskWithProgress(taskID, containerName, "in_progress", msg, detail, pct)
+		}
 
 		oldImage := container.Image
-		result, err := executor.Update(context.Background(), container)
+		result, err := executor.UpdateWithProgress(context.Background(), container, onProgress)
 		if err != nil {
 			logx.Errorf("容器[%s]更新失败: %v", container.Name, err)
 			s.recordHistory(group.ID, container, oldImage, "", model.UpdateStatusFailed, err.Error())
-			s.updateSubTask(taskID, container.Name, "failed", "更新失败: "+err.Error())
+			s.updateSubTaskWithProgress(taskID, container.Name, "failed", "更新失败", err.Error(), 100)
 			taskDetails = append(taskDetails, module.TaskDetail{Name: container.Name, Status: "failed", Message: err.Error()})
 			failed++
 			continue
@@ -425,7 +437,7 @@ func (s *GroupScheduler) executeGroupUpdateWithProgress(groupID int64, taskID st
 
 		logx.Infof("容器[%s]更新成功: %s -> %s", container.Name, oldImage, result.NewImage)
 		s.recordHistory(group.ID, container, oldImage, result.NewImage, model.UpdateStatusSuccess, "")
-		s.updateSubTask(taskID, container.Name, "completed", "更新成功")
+		s.updateSubTaskWithProgress(taskID, container.Name, "completed", "更新成功", "容器已成功更新到最新版本", 100)
 		taskDetails = append(taskDetails, module.TaskDetail{Name: container.Name, Status: "updated"})
 		updated++
 	}

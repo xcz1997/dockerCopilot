@@ -23,6 +23,8 @@ func convertFromModelSubTasks(modelSubTasks []model.SubTask) []SubTask {
 			Name:       st.Name,
 			Status:     st.Status,
 			Message:    st.Message,
+			DetailMsg:  st.DetailMsg,
+			Percentage: st.Percentage,
 			StartedAt:  st.StartedAt,
 			FinishedAt: st.FinishedAt,
 		}
@@ -38,6 +40,8 @@ func convertToModelSubTasks(subTasks []SubTask) []model.SubTask {
 			Name:       st.Name,
 			Status:     st.Status,
 			Message:    st.Message,
+			DetailMsg:  st.DetailMsg,
+			Percentage: st.Percentage,
 			StartedAt:  st.StartedAt,
 			FinishedAt: st.FinishedAt,
 		}
@@ -66,6 +70,8 @@ type SubTask struct {
 	Name       string     `json:"name"`
 	Status     string     `json:"status"` // pending, in_progress, completed, failed
 	Message    string     `json:"message"`
+	DetailMsg  string     `json:"detailMsg,omitempty"`  // 详细进度信息
+	Percentage int        `json:"percentage,omitempty"` // 子任务进度百分比 0-100
 	StartedAt  *time.Time `json:"startedAt,omitempty"`
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
 }
@@ -331,6 +337,11 @@ func (a *ProgressAdapter) UpdateProgressWithMeta(taskID string, percentage int, 
 
 // UpdateSubTask 更新子任务
 func (a *ProgressAdapter) UpdateSubTask(taskID string, subTaskName string, status string, message string) {
+	a.UpdateSubTaskWithProgress(taskID, subTaskName, status, message, "", 0)
+}
+
+// UpdateSubTaskWithProgress 更新子任务（带详细进度）
+func (a *ProgressAdapter) UpdateSubTaskWithProgress(taskID string, subTaskName string, status string, message string, detailMsg string, percentage int) {
 	a.svcCtx.mu.Lock()
 	defer a.svcCtx.mu.Unlock()
 
@@ -345,11 +356,18 @@ func (a *ProgressAdapter) UpdateSubTask(taskID string, subTaskName string, statu
 		if st.Name == subTaskName {
 			existing.SubTasks[i].Status = status
 			existing.SubTasks[i].Message = message
+			if detailMsg != "" {
+				existing.SubTasks[i].DetailMsg = detailMsg
+			}
+			if percentage > 0 {
+				existing.SubTasks[i].Percentage = percentage
+			}
 			if status == "in_progress" && existing.SubTasks[i].StartedAt == nil {
 				existing.SubTasks[i].StartedAt = &now
 			}
 			if (status == "completed" || status == "failed") && existing.SubTasks[i].FinishedAt == nil {
 				existing.SubTasks[i].FinishedAt = &now
+				existing.SubTasks[i].Percentage = 100 // 完成或失败时设为100%
 			}
 			found = true
 			break
@@ -358,15 +376,18 @@ func (a *ProgressAdapter) UpdateSubTask(taskID string, subTaskName string, statu
 
 	if !found {
 		subTask := SubTask{
-			Name:    subTaskName,
-			Status:  status,
-			Message: message,
+			Name:       subTaskName,
+			Status:     status,
+			Message:    message,
+			DetailMsg:  detailMsg,
+			Percentage: percentage,
 		}
 		if status == "in_progress" {
 			subTask.StartedAt = &now
 		}
 		if status == "completed" || status == "failed" {
 			subTask.FinishedAt = &now
+			subTask.Percentage = 100
 		}
 		existing.SubTasks = append(existing.SubTasks, subTask)
 	}

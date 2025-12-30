@@ -881,12 +881,12 @@ const availableContainers = availableItems
           </div>
           <div v-if="availableItems.length" class="max-h-60 overflow-y-auto space-y-2">
             <div v-for="c in availableItems" :key="c.id"
-              class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <div>
-                <span class="text-sm font-medium text-gray-900 dark:text-white">{{ c.name }}</span>
-                <span class="text-xs text-gray-500 dark:text-gray-400 ml-2">{{ c.image }}</span>
+              class="flex items-center justify-between gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div class="min-w-0 flex-1 overflow-hidden">
+                <span class="text-sm font-medium text-gray-900 dark:text-white block truncate" :title="c.name">{{ c.name }}</span>
+                <span class="text-xs text-gray-500 dark:text-gray-400 block truncate" :title="c.image">{{ c.image }}</span>
               </div>
-              <button @click="assignContainer(c)" class="btn-sm btn-primary">分配</button>
+              <button @click="assignContainer(c)" class="btn-sm btn-primary flex-shrink-0">分配</button>
             </div>
           </div>
           <p v-else-if="assignSearchQuery" class="text-sm text-gray-500 dark:text-gray-400">

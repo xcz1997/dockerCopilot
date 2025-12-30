@@ -11,6 +11,8 @@ type SubTask struct {
 	Name       string     `json:"name"`
 	Status     string     `json:"status"` // pending, in_progress, completed, failed
 	Message    string     `json:"message"`
+	DetailMsg  string     `json:"detailMsg,omitempty"`  // 详细进度信息
+	Percentage int        `json:"percentage,omitempty"` // 子任务进度百分比 0-100
 	StartedAt  *time.Time `json:"startedAt,omitempty"`
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
 }
