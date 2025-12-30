@@ -309,6 +309,12 @@ func (e *Executor) UpdateWithProgress(ctx context.Context, mc MatchedContainer, 
 	result.NewImage = newInspect.ID
 	result.Message = "更新成功"
 
+	// 更新缓存：将新镜像标记为不需要更新
+	if e.hubImageInfo != nil {
+		e.hubImageInfo.MarkAsUpdated(newInspect.ID, imageName)
+		logx.Infof("已更新镜像缓存: %s (ID: %s)", imageName, newInspect.ID[:12])
+	}
+
 	reportProgress(100, "更新完成", "容器更新成功")
 	logx.Infof("容器[%s]更新完成", oldName)
 	return result, nil
@@ -387,6 +393,13 @@ func (e *Executor) PullImageWithProgress(ctx context.Context, img MatchedImage, 
 		if readErr != nil {
 			break
 		}
+	}
+
+	// 获取新镜像ID并更新缓存
+	newInspect, _, err := e.dockerClient.ImageInspectWithRaw(ctx, img.FullName)
+	if err == nil && e.hubImageInfo != nil {
+		e.hubImageInfo.MarkAsUpdated(newInspect.ID, img.FullName)
+		logx.Infof("已更新镜像缓存: %s (ID: %s)", img.FullName, newInspect.ID[:12])
 	}
 
 	reportProgress(100, "拉取完成", "镜像更新成功")

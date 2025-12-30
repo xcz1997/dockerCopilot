@@ -69,6 +69,19 @@ func (i *ImageUpdateData) GetImageCheckByName(imageName string) (ImageCheckList,
 	result, ok := i.Data[imageName]
 	return result, ok
 }
+
+// MarkAsUpdated 标记镜像为已更新（不需要更新）
+// 在容器/镜像更新成功后调用，更新缓存状态
+func (i *ImageUpdateData) MarkAsUpdated(imageID string, imageName string) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	// 使用 ImageID 作为 key
+	i.Data[imageID] = ImageCheckList{NeedUpdate: false}
+	// 同时使用镜像名称作为 key（容器列表可能通过名称查询）
+	if imageName != "" {
+		i.Data[imageName] = ImageCheckList{NeedUpdate: false}
+	}
+}
 // IsSelfImage 判断是否为 DockerCopilot 自身镜像
 func IsSelfImage(imageName string) bool {
 	lowerName := strings.ToLower(imageName)
