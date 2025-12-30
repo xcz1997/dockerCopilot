@@ -15,7 +15,7 @@ NC='\033[0m'
 
 # 配置
 IMAGE_NAME="muuua/docker-copilot"
-PLATFORMS="linux/amd64"
+PLATFORMS="linux/amd64,linux/arm64"
 
 # 默认参数
 BUMP_TYPE="patch"
@@ -96,35 +96,37 @@ npm run build
 cd ..
 print_success "前端构建完成"
 
-# Step 3: 构建 Docker 镜像
+# Step 3: 构建并推送 Docker 镜像
 print_step "Step 3/5: 构建 Docker 镜像"
 print_info "平台: ${PLATFORMS}"
 print_info "标签: ${IMAGE_NAME}:${VERSION}"
 print_info "标签: ${IMAGE_NAME}:latest"
 
-docker buildx build \
-    --platform "${PLATFORMS}" \
-    -f docker/Dockerfile \
-    -t "${IMAGE_NAME}:${VERSION}" \
-    -t "${IMAGE_NAME}:latest" \
-    --load \
-    .
-
-print_success "Docker 镜像构建完成（两个 tag 指向同一镜像）"
-
-# Step 4: 推送镜像
 if [ "$DO_PUSH" = true ]; then
-    print_step "Step 4/5: 推送镜像"
-    print_info "推送 ${IMAGE_NAME}:${VERSION}..."
-    docker push "${IMAGE_NAME}:${VERSION}"
-    print_success "已推送 ${IMAGE_NAME}:${VERSION}"
-
-    print_info "推送 ${IMAGE_NAME}:latest..."
-    docker push "${IMAGE_NAME}:latest"
-    print_success "已推送 ${IMAGE_NAME}:latest"
-
-    print_success "镜像推送完成（${VERSION} 和 latest 为同一镜像）"
+    # 多架构构建需要直接推送到 registry
+    print_info "多架构构建，直接推送到 Docker Hub..."
+    docker buildx build \
+        --platform "${PLATFORMS}" \
+        -f docker/Dockerfile \
+        -t "${IMAGE_NAME}:${VERSION}" \
+        -t "${IMAGE_NAME}:latest" \
+        --push \
+        .
+    print_success "Docker 镜像构建并推送完成"
+    print_step "Step 4/5: 镜像已在构建时推送"
+    print_success "已推送 ${IMAGE_NAME}:${VERSION} (linux/amd64, linux/arm64)"
+    print_success "已推送 ${IMAGE_NAME}:latest (linux/amd64, linux/arm64)"
 else
+    # 不推送时只构建单架构用于本地测试
+    print_info "使用 --no-push 参数，仅构建 linux/amd64 用于本地测试..."
+    docker buildx build \
+        --platform "linux/amd64" \
+        -f docker/Dockerfile \
+        -t "${IMAGE_NAME}:${VERSION}" \
+        -t "${IMAGE_NAME}:latest" \
+        --load \
+        .
+    print_success "Docker 镜像构建完成（仅 linux/amd64）"
     print_step "Step 4/5: 跳过推送"
     print_info "使用 --no-push 参数，跳过镜像推送"
 fi
@@ -154,11 +156,15 @@ echo ""
 echo -e "版本: ${YELLOW}${VERSION}${NC}"
 echo -e "镜像: ${YELLOW}${IMAGE_NAME}:${VERSION}${NC}"
 echo -e "镜像: ${YELLOW}${IMAGE_NAME}:latest${NC}"
+if [ "$DO_PUSH" = true ]; then
+    echo -e "平台: ${YELLOW}linux/amd64, linux/arm64${NC}"
+else
+    echo -e "平台: ${YELLOW}linux/amd64${NC} (本地测试)"
+fi
 echo ""
 
 if [ "$DO_PUSH" = false ]; then
-    echo -e "手动推送命令:"
-    echo -e "  docker push ${IMAGE_NAME}:${VERSION}"
-    echo -e "  docker push ${IMAGE_NAME}:latest"
+    echo -e "多架构构建并推送命令:"
+    echo -e "  ./release.sh"
     echo ""
 fi
