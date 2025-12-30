@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -29,7 +29,7 @@ func InitDB(dataDir string) (*sql.DB, error) {
 		logx.Infof("初始化数据库: %s", dbPath)
 
 		var err error
-		db, err = sql.Open("sqlite3", dbPath+"?_busy_timeout=5000&_journal_mode=WAL")
+		db, err = sql.Open("sqlite", dbPath+"?_busy_timeout=5000&_journal_mode=WAL")
 		if err != nil {
 			initErr = err
 			return

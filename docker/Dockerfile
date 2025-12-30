@@ -6,15 +6,19 @@ RUN npm install --registry=https://registry.npmmirror.com
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: 构建后端（在目标架构上运行）
-FROM golang:1.23-alpine AS backend-builder
+# Stage 2: 构建后端（在构建机器架构上交叉编译，避免 QEMU 模拟）
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS backend-builder
+
+ARG TARGETOS
+ARG TARGETARCH
+
 WORKDIR /src
 
-# 安装 CGO 依赖（go-sqlite3 需要）
-RUN apk add --no-cache gcc musl-dev sqlite-dev
-
+# 使用纯 Go 的 SQLite 驱动，避免 CGO 交叉编译问题
 ENV GOPROXY=https://goproxy.cn,direct
-ENV CGO_ENABLED=1
+ENV CGO_ENABLED=0
+ENV GOOS=${TARGETOS}
+ENV GOARCH=${TARGETARCH}
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -34,7 +38,7 @@ COPY --from=backend-builder /src/dockerCopilot ./dockerCopilot
 COPY etc/. ./etc
 COPY start.sh ./start.sh
 
-RUN apk add --no-cache tzdata sqlite-libs \
+RUN apk add --no-cache tzdata \
     && chmod +x start.sh \
     && chmod +x dockerCopilot
 
