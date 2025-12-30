@@ -3,8 +3,10 @@ package container
 import (
 	"context"
 	"sort"
+	"strings"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 	"github.com/xcz1997/dockerCopilot/internal/types"
 
@@ -54,6 +56,24 @@ func (l *ProjectsListLogic) ProjectsList() (resp *types.Resp, err error) {
 		resp.Msg = "获取容器列表失败: " + err.Error()
 		resp.Data = []interface{}{}
 		return resp, nil
+	}
+
+	// 获取所有镜像，建立 ImageID 到镜像名称的映射
+	imageMap := make(map[string]string)
+	images, err := l.svcCtx.DockerClient.ImageList(l.ctx, image.ListOptions{})
+	if err == nil {
+		for _, img := range images {
+			// 使用 RepoTags 中的第一个作为镜像名称
+			if len(img.RepoTags) > 0 {
+				imageMap[img.ID] = img.RepoTags[0]
+			} else if len(img.RepoDigests) > 0 {
+				// 如果没有 tag，使用 RepoDigests 中的镜像名称部分
+				parts := strings.Split(img.RepoDigests[0], "@")
+				if len(parts) > 0 {
+					imageMap[img.ID] = parts[0] + ":latest"
+				}
+			}
+		}
 	}
 
 	// 按 Compose 项目分组
@@ -111,13 +131,22 @@ func (l *ProjectsListLogic) ProjectsList() (resp *types.Resp, err error) {
 			project.UpdateCount++
 		}
 
+		// 获取镜像名称：优先使用 imageMap 中的完整名称
+		imageName := c.Image
+		if mappedName, ok := imageMap[c.ImageID]; ok {
+			imageName = mappedName
+		} else if strings.HasPrefix(c.Image, "sha256:") {
+			// 如果仍然是 sha256 格式，尝试截取显示
+			imageName = c.Image[:19] + "..."
+		}
+
 		// 添加服务信息
 		project.Services = append(project.Services, ServiceInfo{
 			Name:          serviceName,
 			ContainerId:   c.ID[:12],
 			ContainerName: containerName,
 			Status:        c.State,
-			Image:         c.Image,
+			Image:         imageName,
 			HaveUpdate:    haveUpdate,
 		})
 	}
