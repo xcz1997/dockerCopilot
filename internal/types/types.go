@@ -262,6 +262,7 @@ type EnvironmentCreateReq struct {
 	EnvType     string `json:"envType,default=remote"`
 	URL         string `json:"url,optional"`
 	SecretKey   string `json:"secretKey,optional"`
+	Icon        string `json:"icon,optional"`
 }
 
 type EnvironmentUpdateReq struct {
@@ -270,6 +271,7 @@ type EnvironmentUpdateReq struct {
 	Description string `json:"description,optional"`
 	URL         string `json:"url,optional"`
 	SecretKey   string `json:"secretKey,optional"`
+	Icon        string `json:"icon,optional"`
 }
 
 type EnvironmentIdReq struct {

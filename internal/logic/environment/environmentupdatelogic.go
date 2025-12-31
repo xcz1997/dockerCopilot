@@ -36,6 +36,11 @@ func (l *EnvironmentUpdateLogic) EnvironmentUpdate(req *types.EnvironmentUpdateR
 		return resp, nil
 	}
 
+	// 更新图标（本地和远程环境都可以修改）
+	if req.Icon != "" {
+		env.Icon = req.Icon
+	}
+
 	// 本地环境不允许修改类型和 URL
 	if env.EnvType == model.EnvTypeLocal {
 		if req.Name != "" {

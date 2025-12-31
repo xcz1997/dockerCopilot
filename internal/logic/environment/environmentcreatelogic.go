@@ -76,6 +76,7 @@ func (l *EnvironmentCreateLogic) EnvironmentCreate(req *types.EnvironmentCreateR
 		EnvType:     envType,
 		URL:         req.URL,
 		SecretKey:   req.SecretKey,
+		Icon:        req.Icon,
 		Status:      model.EnvStatusUnknown,
 	}
 

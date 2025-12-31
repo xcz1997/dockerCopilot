@@ -40,6 +40,7 @@ type Environment struct {
 	VolumeCount    int        `json:"volumeCount"`
 	CPUCores       int        `json:"cpuCores"`
 	MemoryTotal    int64      `json:"memoryTotal"` // 单位：字节
+	Icon           string     `json:"icon"`        // 自定义图标名称
 	CreatedAt      time.Time  `json:"createdAt"`
 	UpdatedAt      time.Time  `json:"updatedAt"`
 }
@@ -71,9 +72,9 @@ func CreateEnvironment(env *Environment) (int64, error) {
 func UpdateEnvironment(env *Environment) error {
 	_, err := db.Exec(`
 		UPDATE environments
-		SET name = ?, description = ?, url = ?, updated_at = CURRENT_TIMESTAMP
+		SET name = ?, description = ?, url = ?, icon = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, env.Name, env.Description, env.URL, env.ID)
+	`, env.Name, env.Description, env.URL, env.Icon, env.ID)
 	return err
 }
 
@@ -81,9 +82,9 @@ func UpdateEnvironment(env *Environment) error {
 func UpdateEnvironmentWithSecret(env *Environment) error {
 	_, err := db.Exec(`
 		UPDATE environments
-		SET name = ?, description = ?, url = ?, secret_key = ?, updated_at = CURRENT_TIMESTAMP
+		SET name = ?, description = ?, url = ?, secret_key = ?, icon = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, env.Name, env.Description, env.URL, env.SecretKey, env.ID)
+	`, env.Name, env.Description, env.URL, env.SecretKey, env.Icon, env.ID)
 	return err
 }
 
@@ -99,7 +100,7 @@ func GetEnvironmentByID(id int64) (*Environment, error) {
 		SELECT id, name, description, env_type, url, secret_key, jwt_token, token_expires_at,
 		       is_default, status, last_check_at, last_error,
 		       container_count, running_count, stopped_count, image_count,
-		       volume_count, cpu_cores, memory_total,
+		       volume_count, cpu_cores, memory_total, icon,
 		       created_at, updated_at
 		FROM environments WHERE id = ?
 	`, id)
@@ -113,7 +114,7 @@ func GetEnvironmentByName(name string) (*Environment, error) {
 		SELECT id, name, description, env_type, url, secret_key, jwt_token, token_expires_at,
 		       is_default, status, last_check_at, last_error,
 		       container_count, running_count, stopped_count, image_count,
-		       volume_count, cpu_cores, memory_total,
+		       volume_count, cpu_cores, memory_total, icon,
 		       created_at, updated_at
 		FROM environments WHERE name = ?
 	`, name)
@@ -127,7 +128,7 @@ func GetAllEnvironments() ([]Environment, error) {
 		SELECT id, name, description, env_type, url, secret_key, jwt_token, token_expires_at,
 		       is_default, status, last_check_at, last_error,
 		       container_count, running_count, stopped_count, image_count,
-		       volume_count, cpu_cores, memory_total,
+		       volume_count, cpu_cores, memory_total, icon,
 		       created_at, updated_at
 		FROM environments ORDER BY is_default DESC, id ASC
 	`)
@@ -154,7 +155,7 @@ func GetDefaultEnvironment() (*Environment, error) {
 		SELECT id, name, description, env_type, url, secret_key, jwt_token, token_expires_at,
 		       is_default, status, last_check_at, last_error,
 		       container_count, running_count, stopped_count, image_count,
-		       volume_count, cpu_cores, memory_total,
+		       volume_count, cpu_cores, memory_total, icon,
 		       created_at, updated_at
 		FROM environments WHERE is_default = 1 LIMIT 1
 	`)
@@ -168,7 +169,7 @@ func GetLocalEnvironment() (*Environment, error) {
 		SELECT id, name, description, env_type, url, secret_key, jwt_token, token_expires_at,
 		       is_default, status, last_check_at, last_error,
 		       container_count, running_count, stopped_count, image_count,
-		       volume_count, cpu_cores, memory_total,
+		       volume_count, cpu_cores, memory_total, icon,
 		       created_at, updated_at
 		FROM environments WHERE env_type = 'local' LIMIT 1
 	`)
@@ -247,13 +248,13 @@ func scanEnvironment(row *sql.Row) (*Environment, error) {
 	var env Environment
 	var isDefault int
 	var tokenExpiresAt, lastCheckAt sql.NullTime
-	var jwtToken, lastError sql.NullString
+	var jwtToken, lastError, icon sql.NullString
 
 	err := row.Scan(
 		&env.ID, &env.Name, &env.Description, &env.EnvType, &env.URL, &env.SecretKey,
 		&jwtToken, &tokenExpiresAt, &isDefault, &env.Status, &lastCheckAt, &lastError,
 		&env.ContainerCount, &env.RunningCount, &env.StoppedCount, &env.ImageCount,
-		&env.VolumeCount, &env.CPUCores, &env.MemoryTotal,
+		&env.VolumeCount, &env.CPUCores, &env.MemoryTotal, &icon,
 		&env.CreatedAt, &env.UpdatedAt,
 	)
 	if err != nil {
@@ -272,6 +273,9 @@ func scanEnvironment(row *sql.Row) (*Environment, error) {
 	}
 	if lastError.Valid {
 		env.LastError = lastError.String
+	}
+	if icon.Valid {
+		env.Icon = icon.String
 	}
 
 	return &env, nil
@@ -282,13 +286,13 @@ func scanEnvironmentFromRows(rows *sql.Rows) (*Environment, error) {
 	var env Environment
 	var isDefault int
 	var tokenExpiresAt, lastCheckAt sql.NullTime
-	var jwtToken, lastError sql.NullString
+	var jwtToken, lastError, icon sql.NullString
 
 	err := rows.Scan(
 		&env.ID, &env.Name, &env.Description, &env.EnvType, &env.URL, &env.SecretKey,
 		&jwtToken, &tokenExpiresAt, &isDefault, &env.Status, &lastCheckAt, &lastError,
 		&env.ContainerCount, &env.RunningCount, &env.StoppedCount, &env.ImageCount,
-		&env.VolumeCount, &env.CPUCores, &env.MemoryTotal,
+		&env.VolumeCount, &env.CPUCores, &env.MemoryTotal, &icon,
 		&env.CreatedAt, &env.UpdatedAt,
 	)
 	if err != nil {
@@ -307,6 +311,9 @@ func scanEnvironmentFromRows(rows *sql.Rows) (*Environment, error) {
 	}
 	if lastError.Valid {
 		env.LastError = lastError.String
+	}
+	if icon.Valid {
+		env.Icon = icon.String
 	}
 
 	return &env, nil
