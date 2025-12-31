@@ -354,7 +354,7 @@ onMounted(() => {
                 'btn btn-sm px-2 sm:px-3',
                 image.haveUpdate ? 'flex-1' : 'w-full',
                 image.inUsed
-                  ? 'btn-ghost text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                  ? 'btn-ghost text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
                   : 'btn-ghost text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20'
               ]"
               :title="image.inUsed ? '镜像正在使用中，删除需要强制模式' : '删除镜像'"
