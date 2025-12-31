@@ -103,24 +103,30 @@ type GetNewImageReq struct {
 // ======== 群组管理类型 ========
 
 type GroupCreateReq struct {
-	Name        string `json:"name"`
-	GroupType   string `json:"groupType,optional,default=container"`
-	CronExpr    string `json:"cronExpr,optional"`
-	AutoUpdate  bool   `json:"autoUpdate,optional"`
-	CheckUpdate bool   `json:"checkUpdate,default=true"`
-	Priority    int    `json:"priority,default=100"`
-	Enabled     bool   `json:"enabled,default=true"`
+	Name               string `json:"name"`
+	GroupType          string `json:"groupType,optional,default=container"`
+	CronExpr           string `json:"cronExpr,optional"`
+	AutoUpdate         bool   `json:"autoUpdate,optional"`
+	CheckUpdate        bool   `json:"checkUpdate,default=true"`
+	Priority           int    `json:"priority,default=100"`
+	Enabled            bool   `json:"enabled,default=true"`
+	RestartAfterUpdate bool   `json:"restartAfterUpdate,optional"` // 更新后重启容器
+	StartContainers    bool   `json:"startContainers,optional"`    // 启动停止的容器
+	StopContainers     bool   `json:"stopContainers,optional"`     // 关闭运行中的容器
 }
 
 type GroupUpdateReq struct {
-	Id          int64  `path:"id"`
-	Name        string `json:"name,optional"`
-	GroupType   string `json:"groupType,optional"`
-	CronExpr    string `json:"cronExpr,optional"`
-	AutoUpdate  bool   `json:"autoUpdate,optional"`
-	CheckUpdate bool   `json:"checkUpdate,optional"`
-	Priority    int    `json:"priority,optional"`
-	Enabled     bool   `json:"enabled,optional"`
+	Id                 int64  `path:"id"`
+	Name               string `json:"name,optional"`
+	GroupType          string `json:"groupType,optional"`
+	CronExpr           string `json:"cronExpr,optional"`
+	AutoUpdate         bool   `json:"autoUpdate,optional"`
+	CheckUpdate        bool   `json:"checkUpdate,optional"`
+	Priority           int    `json:"priority,optional"`
+	Enabled            bool   `json:"enabled,optional"`
+	RestartAfterUpdate bool   `json:"restartAfterUpdate,optional"` // 更新后重启容器
+	StartContainers    bool   `json:"startContainers,optional"`    // 启动停止的容器
+	StopContainers     bool   `json:"stopContainers,optional"`     // 关闭运行中的容器
 }
 
 type GroupIdReq struct {
@@ -224,4 +230,26 @@ type PerformanceConfigReq struct {
 	MaxConcurrentChecks  int  `json:"maxConcurrentChecks"`  // 镜像检查最大并发数
 	CheckIntervalMinutes int  `json:"checkIntervalMinutes"` // 镜像自动检查间隔（分钟）
 	DisableAutoCheck     bool `json:"disableAutoCheck"`     // 禁用启动时自动检查
+}
+
+// ======== 私有 Registry 配置类型 ========
+
+type PrivateRegistryItem struct {
+	Name     string `json:"name"`              // 名称
+	Host     string `json:"host"`              // 主机地址
+	Username string `json:"username,optional"` // 用户名
+	Password string `json:"password,optional"` // 密码
+	Insecure bool   `json:"insecure,optional"` // 是否允许不安全连接
+}
+
+type PrivateRegistriesConfigReq struct {
+	Enabled    bool                  `json:"enabled"`    // 是否启用
+	Registries []PrivateRegistryItem `json:"registries"` // 私有 Registry 列表
+}
+
+type PrivateRegistryTestReq struct {
+	Host     string `json:"host"`              // 主机地址
+	Username string `json:"username,optional"` // 用户名
+	Password string `json:"password,optional"` // 密码
+	Insecure bool   `json:"insecure,optional"` // 是否允许不安全连接
 }

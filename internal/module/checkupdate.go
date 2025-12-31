@@ -11,6 +11,7 @@ import (
 	"time"
 
 	ref "github.com/distribution/reference"
+	"github.com/xcz1997/dockerCopilot/internal/model"
 	"github.com/xcz1997/dockerCopilot/internal/types"
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -175,7 +176,17 @@ func (i *ImageUpdateData) checkSingleImage(image types.Image) {
 	}
 	remoteDigest, err := GetDigest(digestURL, token)
 	if err != nil {
-		logx.Errorf("获取digest失败 [%s:%s]: %s", image.ImageName, image.ImageTag, err.Error())
+		errMsg := err.Error()
+		// 检查是否为 404 错误，仅 404 时降级为 local
+		if is404Error(errMsg) {
+			logx.Infof("镜像 %s:%s 远程不存在 (404)，标记为本地镜像", image.ImageName, image.ImageTag)
+			updateImageMetadata(image, model.SourceTypeLocal, errMsg)
+		} else {
+			// 其他错误（网络超时、认证失败等）仅记录，不降级
+			logx.Errorf("获取digest失败 [%s:%s]: %s", image.ImageName, image.ImageTag, errMsg)
+			// 更新检查时间和错误信息，但保持原来源类型
+			updateImageMetadataCheckError(image, errMsg)
+		}
 		return
 	}
 	if len(image.RepoDigests) == 0 {
@@ -206,6 +217,52 @@ func (i *ImageUpdateData) checkSingleImage(image types.Image) {
 	i.setImageCheck(image.ID, ImageCheckList{NeedUpdate: needUpdate})
 	// 同时按镜像名称存储，方便容器通过镜像名查找
 	i.setImageCheckByName(image.ImageName, image.ImageTag, ImageCheckList{NeedUpdate: needUpdate})
+	// 远程检查成功，更新元数据标记为 remote
+	updateImageMetadata(image, model.SourceTypeRemote, "")
+}
+
+// is404Error 检查错误信息是否表示 404 Not Found
+func is404Error(errMsg string) bool {
+	lowerMsg := strings.ToLower(errMsg)
+	return strings.Contains(lowerMsg, "404") ||
+		strings.Contains(lowerMsg, "not_found") ||
+		strings.Contains(lowerMsg, "not found") ||
+		strings.Contains(lowerMsg, "name unknown") ||
+		strings.Contains(lowerMsg, "manifest unknown")
+}
+
+// updateImageMetadata 更新镜像元数据
+func updateImageMetadata(image types.Image, sourceType string, checkError string) {
+	now := time.Now()
+	meta := &model.ImageMetadata{
+		ImageID:        image.ID,
+		ImageName:      image.ImageName,
+		ImageTag:       image.ImageTag,
+		SourceType:     sourceType,
+		LastCheckAt:    &now,
+		LastCheckError: checkError,
+	}
+	if err := model.UpsertImageMetadata(meta); err != nil {
+		logx.Errorf("更新镜像元数据失败 [%s]: %v", image.ImageName, err)
+	}
+}
+
+// updateImageMetadataCheckError 仅更新检查错误信息，不改变来源类型
+func updateImageMetadataCheckError(image types.Image, checkError string) {
+	// 先尝试获取现有元数据
+	existing, err := model.GetImageMetadata(image.ID)
+	if err != nil {
+		// 不存在则创建新的，默认 remote
+		updateImageMetadata(image, model.SourceTypeRemote, checkError)
+		return
+	}
+	// 保持原来源类型，仅更新检查错误
+	now := time.Now()
+	existing.LastCheckAt = &now
+	existing.LastCheckError = checkError
+	if err := model.UpsertImageMetadata(existing); err != nil {
+		logx.Errorf("更新镜像元数据失败 [%s]: %v", image.ImageName, err)
+	}
 }
 
 func BuildManifestURL(image types.Image) (string, error) {

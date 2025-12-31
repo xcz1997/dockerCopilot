@@ -2,11 +2,12 @@ package image
 
 import (
 	"context"
-	"github.com/xcz1997/dockerCopilot/internal/utiles"
 	"time"
 
+	"github.com/xcz1997/dockerCopilot/internal/model"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 	"github.com/xcz1997/dockerCopilot/internal/types"
+	"github.com/xcz1997/dockerCopilot/internal/utiles"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -18,13 +19,16 @@ type ImagesListLogic struct {
 }
 
 type Info struct {
-	Id         string `json:"id"`
-	Name       string `json:"name"`
-	Tag        string `json:"tag"`
-	Size       string `json:"size"`
-	InUsed     bool   `json:"inUsed"`
-	CreateTime string `json:"createTime"`
-	HaveUpdate bool   `json:"haveUpdate"`
+	Id             string `json:"id"`
+	Name           string `json:"name"`
+	Tag            string `json:"tag"`
+	Size           string `json:"size"`
+	InUsed         bool   `json:"inUsed"`
+	CreateTime     string `json:"createTime"`
+	HaveUpdate     bool   `json:"haveUpdate"`
+	SourceType     string `json:"sourceType,omitempty"`     // remote/local
+	LastCheckAt    string `json:"lastCheckAt,omitempty"`    // 最后检查时间
+	LastCheckError string `json:"lastCheckError,omitempty"` // 最后检查错误
 }
 
 func NewImagesListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ImagesListLogic {
@@ -44,6 +48,14 @@ func (l *ImagesListLogic) ImagesList() (resp *types.Resp, err error) {
 		resp.Data = map[string]interface{}{}
 		return resp, err
 	}
+
+	// 获取所有镜像元数据
+	metadataMap, err := model.GetImageMetadataMap()
+	if err != nil {
+		logx.Errorf("获取镜像元数据失败: %v", err)
+		metadataMap = make(map[string]*model.ImageMetadata)
+	}
+
 	resp.Code = 200
 	resp.Msg = "success"
 	var imageInfoList []Info
@@ -63,6 +75,17 @@ func (l *ImagesListLogic) ImagesList() (resp *types.Resp, err error) {
 		// 检查镜像是否有更新
 		if hubInfo, ok := l.svcCtx.HubImageInfo.Data[v.ID]; ok {
 			imageInfo.HaveUpdate = hubInfo.NeedUpdate
+		}
+		// 获取镜像元数据（来源类型）
+		if meta, ok := metadataMap[v.ID]; ok {
+			imageInfo.SourceType = meta.SourceType
+			if meta.LastCheckAt != nil {
+				imageInfo.LastCheckAt = meta.LastCheckAt.Format("2006-01-02 15:04:05")
+			}
+			imageInfo.LastCheckError = meta.LastCheckError
+		} else {
+			// 默认为 remote
+			imageInfo.SourceType = model.SourceTypeRemote
 		}
 		imageInfoList = append(imageInfoList, imageInfo)
 	}

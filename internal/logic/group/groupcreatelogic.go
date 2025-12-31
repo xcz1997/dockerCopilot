@@ -63,13 +63,16 @@ func (l *GroupCreateLogic) GroupCreate(req *types.GroupCreateReq) (resp *types.R
 		groupType = model.GroupTypeContainer
 	}
 	group := &model.ContainerGroup{
-		Name:        req.Name,
-		GroupType:   groupType,
-		CronExpr:    req.CronExpr,
-		AutoUpdate:  req.AutoUpdate,
-		CheckUpdate: req.CheckUpdate,
-		Priority:    req.Priority,
-		Enabled:     req.Enabled,
+		Name:               req.Name,
+		GroupType:          groupType,
+		CronExpr:           req.CronExpr,
+		AutoUpdate:         req.AutoUpdate,
+		CheckUpdate:        req.CheckUpdate,
+		Priority:           req.Priority,
+		Enabled:            req.Enabled,
+		RestartAfterUpdate: req.RestartAfterUpdate,
+		StartContainers:    req.StartContainers,
+		StopContainers:     req.StopContainers,
 	}
 
 	id, err := model.CreateGroup(group)

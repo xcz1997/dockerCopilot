@@ -40,7 +40,10 @@ const newGroup = ref({
   autoUpdate: false,
   checkUpdate: true,
   priority: 100,
-  enabled: true
+  enabled: true,
+  restartAfterUpdate: false,
+  startContainers: false,
+  stopContainers: false
 })
 
 // 新建规则表单
@@ -104,7 +107,10 @@ function openCreateModal() {
     autoUpdate: false,
     checkUpdate: true,
     priority: 100,
-    enabled: true
+    enabled: true,
+    restartAfterUpdate: false,
+    startContainers: false,
+    stopContainers: false
   }
   showCreateModal.value = true
 }
@@ -372,6 +378,94 @@ async function openHistoryModal() {
   showHistoryModal.value = true
 }
 
+// 群组容器批量操作
+async function restartGroup(group) {
+  if (operatingIds.value.has(`restart-${group.id}`)) {
+    toastStore.warning('请勿重复点击，正在处理中...')
+    return
+  }
+
+  const confirmed = await confirmStore.show({
+    title: '批量重启',
+    message: `确定要重启群组 "${group.name}" 中的所有容器吗？`,
+    type: 'warning',
+    confirmText: '重启'
+  })
+  if (!confirmed) return
+
+  operatingIds.value.add(`restart-${group.id}`)
+  try {
+    const response = await api.groups.restart(group.id)
+    if (response.code === 200) {
+      toastStore.success(response.msg || '重启操作完成')
+    } else {
+      toastStore.error(response.msg || '重启失败')
+    }
+  } catch (e) {
+    toastStore.error('重启失败: ' + e.message)
+  } finally {
+    operatingIds.value.delete(`restart-${group.id}`)
+  }
+}
+
+async function startGroup(group) {
+  if (operatingIds.value.has(`start-${group.id}`)) {
+    toastStore.warning('请勿重复点击，正在处理中...')
+    return
+  }
+
+  const confirmed = await confirmStore.show({
+    title: '批量启动',
+    message: `确定要启动群组 "${group.name}" 中的所有容器吗？`,
+    type: 'info',
+    confirmText: '启动'
+  })
+  if (!confirmed) return
+
+  operatingIds.value.add(`start-${group.id}`)
+  try {
+    const response = await api.groups.start(group.id)
+    if (response.code === 200) {
+      toastStore.success(response.msg || '启动操作完成')
+    } else {
+      toastStore.error(response.msg || '启动失败')
+    }
+  } catch (e) {
+    toastStore.error('启动失败: ' + e.message)
+  } finally {
+    operatingIds.value.delete(`start-${group.id}`)
+  }
+}
+
+async function stopGroup(group) {
+  if (operatingIds.value.has(`stop-${group.id}`)) {
+    toastStore.warning('请勿重复点击，正在处理中...')
+    return
+  }
+
+  const confirmed = await confirmStore.show({
+    title: '批量停止',
+    message: `确定要停止群组 "${group.name}" 中的所有容器吗？`,
+    type: 'danger',
+    confirmText: '停止'
+  })
+  if (!confirmed) return
+
+  operatingIds.value.add(`stop-${group.id}`)
+  try {
+    const response = await api.groups.stop(group.id)
+    if (response.code === 200) {
+      toastStore.success(response.msg || '停止操作完成')
+    } else {
+      toastStore.error(response.msg || '停止失败')
+    }
+  } catch (e) {
+    toastStore.error('停止失败: ' + e.message)
+  } finally {
+    operatingIds.value.delete(`stop-${group.id}`)
+  }
+}
+
 function getRuleTypeLabel(type) {
   const found = ruleTypes.find(t => t.value === type)
   return found?.label || type
@@ -606,6 +700,42 @@ const availableContainers = availableItems
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
+          <!-- 容器操作按钮（仅容器类型显示） -->
+          <button
+            v-if="group.groupType === 'container'"
+            @click="restartGroup(group)"
+            :disabled="operatingIds.has(`restart-${group.id}`)"
+            class="btn btn-sm btn-info text-xs sm:text-sm px-2 sm:px-3"
+            title="批量重启"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+          <button
+            v-if="group.groupType === 'container'"
+            @click="startGroup(group)"
+            :disabled="operatingIds.has(`start-${group.id}`)"
+            class="btn btn-sm btn-success text-xs sm:text-sm px-2 sm:px-3"
+            title="批量启动"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+          <button
+            v-if="group.groupType === 'container'"
+            @click="stopGroup(group)"
+            :disabled="operatingIds.has(`stop-${group.id}`)"
+            class="btn btn-sm btn-danger text-xs sm:text-sm px-2 sm:px-3"
+            title="批量停止"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+            </svg>
+          </button>
           <button @click="openEditModal(group)" class="btn btn-sm btn-secondary text-xs sm:text-sm px-2 sm:px-3" title="编辑">
             <span class="hidden sm:inline">编辑</span>
             <svg class="w-4 h-4 sm:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -685,6 +815,24 @@ const availableContainers = availableItems
               <span class="text-sm text-gray-700 dark:text-gray-300">启用</span>
             </label>
           </div>
+          <!-- 容器操作选项（仅容器类型显示） -->
+          <div v-if="newGroup.groupType === 'container'" class="space-y-2 pt-4 border-t border-gray-200 dark:border-gray-600">
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">容器操作选项</p>
+            <div class="flex flex-wrap items-center gap-4">
+              <label class="flex items-center gap-2">
+                <input v-model="newGroup.restartAfterUpdate" type="checkbox" class="checkbox">
+                <span class="text-sm text-gray-700 dark:text-gray-300">更新后重启</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input v-model="newGroup.startContainers" type="checkbox" class="checkbox">
+                <span class="text-sm text-gray-700 dark:text-gray-300">启动容器</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input v-model="newGroup.stopContainers" type="checkbox" class="checkbox">
+                <span class="text-sm text-gray-700 dark:text-gray-300">关闭容器</span>
+              </label>
+            </div>
+          </div>
         </div>
         <div class="flex justify-end gap-3 mt-6">
           <button @click="showCreateModal = false" class="btn-secondary">取消</button>
@@ -746,6 +894,24 @@ const availableContainers = availableItems
               <input v-model="editingGroup.enabled" type="checkbox" class="checkbox">
               <span class="text-sm text-gray-700 dark:text-gray-300">启用</span>
             </label>
+          </div>
+          <!-- 容器操作选项（仅容器类型显示） -->
+          <div v-if="editingGroup.groupType === 'container'" class="space-y-2 pt-4 border-t border-gray-200 dark:border-gray-600">
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">容器操作选项</p>
+            <div class="flex flex-wrap items-center gap-4">
+              <label class="flex items-center gap-2">
+                <input v-model="editingGroup.restartAfterUpdate" type="checkbox" class="checkbox">
+                <span class="text-sm text-gray-700 dark:text-gray-300">更新后重启</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input v-model="editingGroup.startContainers" type="checkbox" class="checkbox">
+                <span class="text-sm text-gray-700 dark:text-gray-300">启动容器</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input v-model="editingGroup.stopContainers" type="checkbox" class="checkbox">
+                <span class="text-sm text-gray-700 dark:text-gray-300">关闭容器</span>
+              </label>
+            </div>
           </div>
         </div>
         <div class="flex justify-end gap-3 mt-6">

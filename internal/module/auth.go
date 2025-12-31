@@ -1,12 +1,17 @@
 package module
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -31,6 +36,11 @@ func GetToken(image types.Image, registryAuth string) (string, error) {
 	normalizedRef, err := ref.ParseNormalizedNamed(image.ImageName)
 	if err != nil {
 		return "", err
+	}
+
+	// 如果没有提供认证信息，尝试从私有 Registry 配置查找
+	if registryAuth == "" {
+		registryAuth = findPrivateRegistryAuth(image.ImageName)
 	}
 
 	URL := GetChallengeURL(normalizedRef)
@@ -225,4 +235,98 @@ func checkHost(host string) bool {
 
 	logx.Errorf("Failed to connect to %s: %s", URL, resp.Status)
 	return false
+}
+
+// findPrivateRegistryAuth 根据镜像名查找私有 Registry 认证信息
+func findPrivateRegistryAuth(imageName string) string {
+	config, err := model.GetPrivateRegistriesConfig()
+	if err != nil || !config.Enabled || len(config.Registries) == 0 {
+		return ""
+	}
+
+	// 从镜像名中提取 Registry 地址
+	host := extractRegistryHost(imageName)
+	if host == "" {
+		return ""
+	}
+
+	// 查找匹配的私有 Registry
+	for _, reg := range config.Registries {
+		if reg.Host == host || strings.HasSuffix(host, "."+reg.Host) {
+			if reg.Username == "" {
+				return ""
+			}
+			// 解密密码
+			password := reg.Password
+			encryptKey := os.Getenv("secretKey")
+			if encryptKey != "" && password != "" {
+				decrypted, err := decryptPassword(password, encryptKey)
+				if err == nil {
+					password = decrypted
+				}
+			}
+			// 构建 Basic Auth
+			auth := base64.StdEncoding.EncodeToString([]byte(reg.Username + ":" + password))
+			logx.Infof("使用私有 Registry 认证: %s@%s", reg.Username, reg.Host)
+			return auth
+		}
+	}
+	return ""
+}
+
+// extractRegistryHost 从镜像名中提取 Registry 地址
+func extractRegistryHost(imageName string) string {
+	normalizedRef, err := ref.ParseNormalizedNamed(imageName)
+	if err != nil {
+		return ""
+	}
+	domain := ref.Domain(normalizedRef)
+	// docker.io 是默认的 Docker Hub，不属于私有 Registry
+	if domain == DefaultRegistryDomain {
+		return ""
+	}
+	return domain
+}
+
+// decryptPassword 使用 AES-GCM 解密密码
+func decryptPassword(cipherText, key string) (string, error) {
+	if cipherText == "" {
+		return "", nil
+	}
+
+	// Base64 解码
+	data, err := base64.StdEncoding.DecodeString(cipherText)
+	if err != nil {
+		return "", err
+	}
+
+	// 派生 32 字节密钥
+	hash := sha256.Sum256([]byte(key))
+	derivedKey := hash[:]
+
+	block, err := aes.NewCipher(derivedKey)
+	if err != nil {
+		return "", err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(data) < nonceSize {
+		return "", errors.New("ciphertext too short")
+	}
+
+	// 分离 nonce 和密文
+	nonce, cipherData := data[:nonceSize], data[nonceSize:]
+
+	// 解密
+	plainText, err := gcm.Open(nil, nonce, cipherData, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return string(plainText), nil
 }

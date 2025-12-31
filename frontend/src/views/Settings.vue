@@ -102,6 +102,15 @@ const performanceEnvOverride = ref({
 const performanceLoading = ref(false)
 const performanceSaving = ref(false)
 
+// 私有 Registry 配置
+const privateRegistriesConfig = ref({
+  enabled: false,
+  registries: []
+})
+const privateRegistriesLoading = ref(false)
+const privateRegistriesSaving = ref(false)
+const privateRegistryTesting = ref({}) // 用于追踪每个 Registry 的测试状态
+
 // 计算属性：检查是否有任何环境变量覆盖
 const hasRegistryEnvOverride = () => {
   return registryEnvOverride.value.enabled.hasOverride || registryEnvOverride.value.mirrors.hasOverride
@@ -421,6 +430,85 @@ async function savePerformanceConfig() {
   }
 }
 
+// 私有 Registry 配置方法
+async function fetchPrivateRegistriesConfig() {
+  privateRegistriesLoading.value = true
+  try {
+    const response = await api.settings.getPrivateRegistries()
+    if (response.code === 200) {
+      privateRegistriesConfig.value = {
+        enabled: response.data.enabled || false,
+        registries: response.data.registries || []
+      }
+    }
+  } catch (e) {
+    console.error('获取私有 Registry 配置失败:', e)
+  } finally {
+    privateRegistriesLoading.value = false
+  }
+}
+
+async function savePrivateRegistriesConfig() {
+  privateRegistriesSaving.value = true
+  try {
+    // 过滤空的 Registry
+    const registries = privateRegistriesConfig.value.registries.filter(r => r.host && r.host.trim() !== '')
+    const response = await api.settings.savePrivateRegistries({
+      enabled: privateRegistriesConfig.value.enabled,
+      registries: registries
+    })
+    if (response.code === 200) {
+      toastStore.success('保存成功')
+      privateRegistriesConfig.value.registries = registries
+    } else {
+      toastStore.error(response.msg || '保存失败')
+    }
+  } catch (e) {
+    toastStore.error('保存失败: ' + e.message)
+  } finally {
+    privateRegistriesSaving.value = false
+  }
+}
+
+async function testPrivateRegistry(registry, index) {
+  if (!registry.host || !registry.host.trim()) {
+    toastStore.warning('Registry 地址不能为空')
+    return
+  }
+  privateRegistryTesting.value[index] = true
+  try {
+    const response = await api.settings.testPrivateRegistry({
+      host: registry.host,
+      username: registry.username || '',
+      password: registry.password || '',
+      insecure: registry.insecure || false
+    })
+    if (response.code === 200) {
+      toastStore.success(`${registry.host} 连接成功`)
+    } else {
+      toastStore.error(response.msg || '连接失败')
+    }
+  } catch (e) {
+    toastStore.error('测试失败: ' + e.message)
+  } finally {
+    privateRegistryTesting.value[index] = false
+  }
+}
+
+function addPrivateRegistry() {
+  privateRegistriesConfig.value.registries.push({
+    name: '',
+    host: '',
+    username: '',
+    password: '',
+    insecure: false
+  })
+}
+
+function removePrivateRegistry(index) {
+  privateRegistriesConfig.value.registries.splice(index, 1)
+}
+
 async function handleUpdate() {
   // Docker 环境检查
   if (version.value?.isDocker) {
@@ -468,6 +556,7 @@ onMounted(() => {
   fetchRegistryConfig()
   fetchProxyConfig()
   fetchPerformanceConfig()
+  fetchPrivateRegistriesConfig()
 })
 </script>
 
@@ -1304,6 +1393,164 @@ onMounted(() => {
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
             {{ performanceSaving ? '保存中...' : '保存配置' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 私有 Registry 配置 -->
+    <div class="card p-6">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          私有 Registry 认证
+        </div>
+      </h3>
+      <p class="text-gray-500 dark:text-gray-400 mb-4">
+        配置私有 Docker Registry 的认证信息，用于拉取需要认证的私有镜像。密码将加密存储。
+      </p>
+
+      <div v-if="privateRegistriesLoading" class="flex items-center gap-2 text-gray-500 py-4">
+        <svg class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+        加载配置...
+      </div>
+
+      <div v-else class="space-y-4">
+        <!-- 启用开关 -->
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="font-medium text-gray-900 dark:text-white">启用私有 Registry 认证</label>
+            <p class="text-sm text-gray-500 dark:text-gray-400">开启后将使用配置的认证信息访问私有 Registry</p>
+          </div>
+          <button
+            @click="privateRegistriesConfig.enabled = !privateRegistriesConfig.enabled"
+            :class="[
+              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+              privateRegistriesConfig.enabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+            ]"
+          >
+            <span
+              :class="[
+                'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                privateRegistriesConfig.enabled ? 'translate-x-6' : 'translate-x-1'
+              ]"
+            />
+          </button>
+        </div>
+
+        <!-- Registry 列表 -->
+        <div v-if="privateRegistriesConfig.enabled" class="space-y-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+          <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+            私有 Registry 列表
+          </p>
+
+          <div v-for="(registry, index) in privateRegistriesConfig.registries" :key="index" class="p-4 rounded-lg border border-gray-200 dark:border-gray-700 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Registry #{{ index + 1 }}</span>
+              <div class="flex items-center gap-2">
+                <button
+                  @click="testPrivateRegistry(registry, index)"
+                  :disabled="privateRegistryTesting[index]"
+                  class="btn btn-secondary btn-sm"
+                >
+                  <svg v-if="privateRegistryTesting[index]" class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  {{ privateRegistryTesting[index] ? '测试中' : '测试连接' }}
+                </button>
+                <button
+                  @click="removePrivateRegistry(index)"
+                  class="btn btn-ghost btn-sm text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                >
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">名称（可选）</label>
+                <input
+                  v-model="registry.name"
+                  type="text"
+                  class="input"
+                  placeholder="例如：公司私有库"
+                />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Registry 地址</label>
+                <input
+                  v-model="registry.host"
+                  type="text"
+                  class="input"
+                  placeholder="例如：registry.example.com"
+                />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">用户名</label>
+                <input
+                  v-model="registry.username"
+                  type="text"
+                  class="input"
+                  placeholder="用户名"
+                />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">密码</label>
+                <input
+                  v-model="registry.password"
+                  type="password"
+                  class="input"
+                  placeholder="密码"
+                />
+              </div>
+            </div>
+
+            <label class="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                v-model="registry.insecure"
+                class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+              />
+              <span class="text-gray-600 dark:text-gray-400">允许不安全连接（HTTP）</span>
+            </label>
+          </div>
+
+          <button
+            @click="addPrivateRegistry"
+            class="btn btn-secondary btn-sm"
+          >
+            <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            添加 Registry
+          </button>
+
+          <p class="text-xs text-gray-500 dark:text-gray-400">
+            配置私有 Registry 后，检查镜像更新时将自动使用对应的认证信息。
+          </p>
+        </div>
+
+        <!-- 保存按钮 -->
+        <div class="flex gap-3 pt-2">
+          <button
+            @click="savePrivateRegistriesConfig"
+            :disabled="privateRegistriesSaving"
+            class="btn btn-primary"
+          >
+            <svg v-if="privateRegistriesSaving" class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            {{ privateRegistriesSaving ? '保存中...' : '保存配置' }}
           </button>
         </div>
       </div>

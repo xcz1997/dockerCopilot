@@ -693,3 +693,82 @@ func HasPerformanceEnvOverride() bool {
 		os.Getenv(EnvPerformanceCheckIntervalMinutes) != "" ||
 		os.Getenv(EnvPerformanceDisableAutoCheck) != ""
 }
+
+// ======== 私有 Registry 配置 ========
+
+const (
+	SettingPrivateRegistriesEnabled = "private_registries_enabled"
+	SettingPrivateRegistries        = "private_registries"
+)
+
+// PrivateRegistry 私有 Registry 配置
+type PrivateRegistry struct {
+	Name     string `json:"name"`
+	Host     string `json:"host"`
+	Username string `json:"username"`
+	Password string `json:"password"` // AES 加密存储
+	Insecure bool   `json:"insecure"`
+}
+
+// PrivateRegistriesConfig 私有 Registry 配置组
+type PrivateRegistriesConfig struct {
+	Enabled    bool              `json:"enabled"`
+	Registries []PrivateRegistry `json:"registries"`
+}
+
+// GetPrivateRegistriesConfig 获取私有 Registry 配置
+func GetPrivateRegistriesConfig() (*PrivateRegistriesConfig, error) {
+	config := &PrivateRegistriesConfig{
+		Enabled:    false,
+		Registries: []PrivateRegistry{},
+	}
+
+	settings, err := GetSettings([]string{
+		SettingPrivateRegistriesEnabled,
+		SettingPrivateRegistries,
+	})
+	if err != nil {
+		return config, err
+	}
+
+	if settings[SettingPrivateRegistriesEnabled] == "true" {
+		config.Enabled = true
+	}
+
+	if settings[SettingPrivateRegistries] != "" {
+		var registries []PrivateRegistry
+		if err := json.Unmarshal([]byte(settings[SettingPrivateRegistries]), &registries); err == nil {
+			config.Registries = registries
+		}
+	}
+
+	return config, nil
+}
+
+// SavePrivateRegistriesConfig 保存私有 Registry 配置
+func SavePrivateRegistriesConfig(config *PrivateRegistriesConfig) error {
+	registriesJSON, err := json.Marshal(config.Registries)
+	if err != nil {
+		return err
+	}
+
+	return SetSettings(map[string]string{
+		SettingPrivateRegistriesEnabled: fmt.Sprintf("%v", config.Enabled),
+		SettingPrivateRegistries:        string(registriesJSON),
+	})
+}
+
+// FindPrivateRegistry 根据 host 查找私有 Registry 配置
+func FindPrivateRegistry(host string) *PrivateRegistry {
+	config, err := GetPrivateRegistriesConfig()
+	if err != nil || !config.Enabled {
+		return nil
+	}
+
+	for _, reg := range config.Registries {
+		if reg.Host == host {
+			return &reg
+		}
+	}
+	return nil
+}

@@ -311,6 +311,17 @@ onMounted(() => {
             <span v-if="image.haveUpdate" class="badge badge-warning text-xs whitespace-nowrap flex-shrink-0">
               有更新
             </span>
+            <!-- 来源标记 -->
+            <span
+              v-if="image.sourceType"
+              :class="[
+                'badge text-xs whitespace-nowrap flex-shrink-0',
+                image.sourceType === 'local' ? 'badge-secondary' : 'badge-info'
+              ]"
+              :title="image.sourceType === 'local' ? '本地镜像（远程不存在）' : '远程镜像'"
+            >
+              {{ image.sourceType === 'local' ? '本地' : '远程' }}
+            </span>
           </div>
 
           <!-- 详细信息 -->

@@ -100,22 +100,30 @@ type VersionReq {
 // ======== 群组管理类型定义 ========
 
 type GroupCreateReq {
-	Name        string `json:"name"`
-	CronExpr    string `json:"cronExpr,optional"`
-	AutoUpdate  bool   `json:"autoUpdate,optional"`
-	CheckUpdate bool   `json:"checkUpdate,default=true"`
-	Priority    int    `json:"priority,default=100"`
-	Enabled     bool   `json:"enabled,default=true"`
+	Name               string `json:"name"`
+	GroupType          string `json:"groupType,optional,default=container"`
+	CronExpr           string `json:"cronExpr,optional"`
+	AutoUpdate         bool   `json:"autoUpdate,optional"`
+	CheckUpdate        bool   `json:"checkUpdate,default=true"`
+	Priority           int    `json:"priority,default=100"`
+	Enabled            bool   `json:"enabled,default=true"`
+	RestartAfterUpdate bool   `json:"restartAfterUpdate,optional"` // 更新后重启容器
+	StartContainers    bool   `json:"startContainers,optional"`    // 启动停止的容器
+	StopContainers     bool   `json:"stopContainers,optional"`     // 关闭运行中的容器
 }
 
 type GroupUpdateReq {
-	Id          int64  `path:"id"`
-	Name        string `json:"name,optional"`
-	CronExpr    string `json:"cronExpr,optional"`
-	AutoUpdate  bool   `json:"autoUpdate,optional"`
-	CheckUpdate bool   `json:"checkUpdate,optional"`
-	Priority    int    `json:"priority,optional"`
-	Enabled     bool   `json:"enabled,optional"`
+	Id                 int64  `path:"id"`
+	Name               string `json:"name,optional"`
+	GroupType          string `json:"groupType,optional"`
+	CronExpr           string `json:"cronExpr,optional"`
+	AutoUpdate         bool   `json:"autoUpdate,optional"`
+	CheckUpdate        bool   `json:"checkUpdate,optional"`
+	Priority           int    `json:"priority,optional"`
+	Enabled            bool   `json:"enabled,optional"`
+	RestartAfterUpdate bool   `json:"restartAfterUpdate,optional"` // 更新后重启容器
+	StartContainers    bool   `json:"startContainers,optional"`    // 启动停止的容器
+	StopContainers     bool   `json:"stopContainers,optional"`     // 关闭运行中的容器
 }
 
 type GroupIdReq {
@@ -294,5 +302,15 @@ service dockerCopilot {
 
 	@handler historyList
 	get /group/history (HistoryListReq) returns (Resp)
+
+	// 群组容器批量操作
+	@handler groupRestart
+	post /group/:id/restart (GroupIdReq) returns (Resp)
+
+	@handler groupStart
+	post /group/:id/start (GroupIdReq) returns (Resp)
+
+	@handler groupStop
+	post /group/:id/stop (GroupIdReq) returns (Resp)
 }
 

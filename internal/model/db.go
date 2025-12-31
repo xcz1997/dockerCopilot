@@ -80,6 +80,11 @@ func migrate(db *sql.DB) error {
 	// 添加 group_type 列（如果不存在，忽略错误）
 	_, _ = db.Exec(`ALTER TABLE container_groups ADD COLUMN group_type TEXT NOT NULL DEFAULT 'container'`)
 
+	// 添加容器操作字段（如果不存在，忽略错误）
+	_, _ = db.Exec(`ALTER TABLE container_groups ADD COLUMN restart_after_update INTEGER NOT NULL DEFAULT 0`)
+	_, _ = db.Exec(`ALTER TABLE container_groups ADD COLUMN start_containers INTEGER NOT NULL DEFAULT 0`)
+	_, _ = db.Exec(`ALTER TABLE container_groups ADD COLUMN stop_containers INTEGER NOT NULL DEFAULT 0`)
+
 	// 规则表
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS group_rules (
@@ -199,6 +204,27 @@ func migrate(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
+
+	// 镜像元数据表
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS image_metadata (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			image_id TEXT NOT NULL UNIQUE,
+			image_name TEXT NOT NULL,
+			image_tag TEXT NOT NULL,
+			source_type TEXT NOT NULL DEFAULT 'remote',
+			registry_host TEXT,
+			last_check_at DATETIME,
+			last_check_error TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return err
+	}
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_image_metadata_image_id ON image_metadata(image_id)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_image_metadata_source_type ON image_metadata(source_type)`)
 
 	return nil
 }

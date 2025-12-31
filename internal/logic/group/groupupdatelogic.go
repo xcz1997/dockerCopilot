@@ -70,6 +70,9 @@ func (l *GroupUpdateLogic) GroupUpdate(req *types.GroupUpdateReq) (resp *types.R
 		existing.Priority = req.Priority
 	}
 	existing.Enabled = req.Enabled
+	existing.RestartAfterUpdate = req.RestartAfterUpdate
+	existing.StartContainers = req.StartContainers
+	existing.StopContainers = req.StopContainers
 
 	// 保存更新
 	if err := model.UpdateGroup(existing); err != nil {

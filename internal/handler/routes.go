@@ -259,6 +259,22 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/group/history",
 				Handler: group.HistoryListHandler(serverCtx),
 			},
+			// 群组容器批量操作
+			{
+				Method:  http.MethodPost,
+				Path:    "/group/:id/restart",
+				Handler: group.GroupRestartHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/group/:id/start",
+				Handler: group.GroupStartHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/group/:id/stop",
+				Handler: group.GroupStopHandler(serverCtx),
+			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
@@ -334,6 +350,22 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodPost,
 				Path:    "/settings/performance",
 				Handler: settings.PerformanceSaveHandler(serverCtx),
+			},
+			// 私有 Registry 配置
+			{
+				Method:  http.MethodGet,
+				Path:    "/settings/private-registries",
+				Handler: settings.PrivateRegistriesGetHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/settings/private-registries",
+				Handler: settings.PrivateRegistriesSaveHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/settings/private-registry/test",
+				Handler: settings.PrivateRegistryTestHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

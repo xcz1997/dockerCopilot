@@ -86,7 +86,11 @@ const api = {
     delete: (id) => instance.delete(`/group/${id}`),
     check: (id) => instance.post(`/group/${id}/check`),
     triggerUpdate: (id) => instance.post(`/group/${id}/update`),
-    history: (params) => instance.get('/group/history', { params })
+    history: (params) => instance.get('/group/history', { params }),
+    // 群组容器批量操作
+    restart: (id) => instance.post(`/group/${id}/restart`),
+    start: (id) => instance.post(`/group/${id}/start`),
+    stop: (id) => instance.post(`/group/${id}/stop`)
   },
 
   rules: {
@@ -117,7 +121,11 @@ const api = {
     testProxy: (data) => instance.post('/settings/proxy/test', data, { headers: { 'Content-Type': 'application/json' } }),
     // 性能配置
     getPerformance: () => instance.get('/settings/performance'),
-    savePerformance: (data) => instance.post('/settings/performance', data, { headers: { 'Content-Type': 'application/json' } })
+    savePerformance: (data) => instance.post('/settings/performance', data, { headers: { 'Content-Type': 'application/json' } }),
+    // 私有 Registry 配置
+    getPrivateRegistries: () => instance.get('/settings/private-registries'),
+    savePrivateRegistries: (data) => instance.post('/settings/private-registries', data, { headers: { 'Content-Type': 'application/json' } }),
+    testPrivateRegistry: (data) => instance.post('/settings/private-registry/test', data, { headers: { 'Content-Type': 'application/json' } })
   },
 
   tasks: {
