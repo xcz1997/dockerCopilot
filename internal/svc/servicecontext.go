@@ -62,6 +62,7 @@ type ServiceContext struct {
 	DockerClient               *client.Client
 	DB                         *sql.DB
 	GroupScheduler             *scheduler.GroupScheduler
+	EventWatcher               *module.ContainerEventWatcher
 	mu                         sync.Mutex
 }
 
@@ -116,6 +117,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 创建群组调度器
 	groupScheduler := scheduler.NewGroupScheduler(cli, hubImageInfo)
 
+	// 创建容器事件监听器
+	eventWatcher := module.NewContainerEventWatcher(cli)
+
 	return &ServiceContext{
 		Config:         c,
 		HubImageInfo:   hubImageInfo,
@@ -123,6 +127,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		DockerClient:   cli,
 		DB:             db,
 		GroupScheduler: groupScheduler,
+		EventWatcher:   eventWatcher,
 	}
 }
 

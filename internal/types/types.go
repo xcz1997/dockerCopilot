@@ -172,3 +172,17 @@ type BarkTestReq struct {
 	Server string `json:"server"`
 	Key    string `json:"key"`
 }
+
+// ======== 容器事件通知配置 ========
+
+type ContainerEventConfigReq struct {
+	Enabled           bool `json:"enabled"`           // 是否启用容器事件通知
+	NotifyOnStart     bool `json:"notifyOnStart"`     // 容器启动时通知
+	NotifyOnStop      bool `json:"notifyOnStop"`      // 容器停止时通知
+	NotifyOnDie       bool `json:"notifyOnDie"`       // 容器异常退出时通知
+	NotifyOnRestart   bool `json:"notifyOnRestart"`   // 容器重启时通知
+	NotifyOnCreate    bool `json:"notifyOnCreate"`    // 容器创建时通知
+	NotifyOnDestroy   bool `json:"notifyOnDestroy"`   // 容器删除时通知
+	NotifyOnHealthy   bool `json:"notifyOnHealthy"`   // 容器健康检查通过时通知
+	NotifyOnUnhealthy bool `json:"notifyOnUnhealthy"` // 容器健康检查失败时通知
+}

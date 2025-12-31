@@ -90,6 +90,19 @@ const (
 	SettingBarkShowDetail = "bark_show_detail" // true/false
 )
 
+// 容器状态变化通知配置常量
+const (
+	SettingContainerEventEnabled = "container_event_enabled" // 是否启用容器事件通知
+	SettingNotifyOnStart         = "notify_on_start"         // 容器启动时通知
+	SettingNotifyOnStop          = "notify_on_stop"          // 容器停止时通知
+	SettingNotifyOnDie           = "notify_on_die"           // 容器异常退出时通知
+	SettingNotifyOnRestart       = "notify_on_restart"       // 容器重启时通知
+	SettingNotifyOnCreate        = "notify_on_create"        // 容器创建时通知
+	SettingNotifyOnDestroy       = "notify_on_destroy"       // 容器删除时通知
+	SettingNotifyOnHealthy       = "notify_on_healthy"       // 容器健康检查状态变化时通知
+	SettingNotifyOnUnhealthy     = "notify_on_unhealthy"     // 容器健康检查失败时通知
+)
+
 // 通知模式常量
 const (
 	NotifyModeAlways      = "always"       // 始终通知
@@ -156,5 +169,70 @@ func SaveBarkConfig(config *BarkConfig) error {
 		SettingBarkKey:        config.Key,
 		SettingBarkNotifyMode: notifyMode,
 		SettingBarkShowDetail: showDetailStr,
+	})
+}
+
+// ContainerEventConfig 容器事件通知配置
+type ContainerEventConfig struct {
+	Enabled         bool `json:"enabled"`         // 是否启用容器事件通知
+	NotifyOnStart   bool `json:"notifyOnStart"`   // 容器启动时通知
+	NotifyOnStop    bool `json:"notifyOnStop"`    // 容器停止时通知
+	NotifyOnDie     bool `json:"notifyOnDie"`     // 容器异常退出时通知
+	NotifyOnRestart bool `json:"notifyOnRestart"` // 容器重启时通知
+	NotifyOnCreate  bool `json:"notifyOnCreate"`  // 容器创建时通知
+	NotifyOnDestroy bool `json:"notifyOnDestroy"` // 容器删除时通知
+	NotifyOnHealthy bool `json:"notifyOnHealthy"` // 容器健康检查通过时通知
+	NotifyOnUnhealthy bool `json:"notifyOnUnhealthy"` // 容器健康检查失败时通知
+}
+
+// GetContainerEventConfig 获取容器事件通知配置
+func GetContainerEventConfig() (*ContainerEventConfig, error) {
+	settings, err := GetSettings([]string{
+		SettingContainerEventEnabled,
+		SettingNotifyOnStart,
+		SettingNotifyOnStop,
+		SettingNotifyOnDie,
+		SettingNotifyOnRestart,
+		SettingNotifyOnCreate,
+		SettingNotifyOnDestroy,
+		SettingNotifyOnHealthy,
+		SettingNotifyOnUnhealthy,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &ContainerEventConfig{
+		Enabled:         settings[SettingContainerEventEnabled] == "true",
+		NotifyOnStart:   settings[SettingNotifyOnStart] == "true",
+		NotifyOnStop:    settings[SettingNotifyOnStop] == "true",
+		NotifyOnDie:     settings[SettingNotifyOnDie] == "true",
+		NotifyOnRestart: settings[SettingNotifyOnRestart] == "true",
+		NotifyOnCreate:  settings[SettingNotifyOnCreate] == "true",
+		NotifyOnDestroy: settings[SettingNotifyOnDestroy] == "true",
+		NotifyOnHealthy: settings[SettingNotifyOnHealthy] == "true",
+		NotifyOnUnhealthy: settings[SettingNotifyOnUnhealthy] == "true",
+	}, nil
+}
+
+// SaveContainerEventConfig 保存容器事件通知配置
+func SaveContainerEventConfig(config *ContainerEventConfig) error {
+	boolToStr := func(b bool) string {
+		if b {
+			return "true"
+		}
+		return "false"
+	}
+
+	return SetSettings(map[string]string{
+		SettingContainerEventEnabled: boolToStr(config.Enabled),
+		SettingNotifyOnStart:         boolToStr(config.NotifyOnStart),
+		SettingNotifyOnStop:          boolToStr(config.NotifyOnStop),
+		SettingNotifyOnDie:           boolToStr(config.NotifyOnDie),
+		SettingNotifyOnRestart:       boolToStr(config.NotifyOnRestart),
+		SettingNotifyOnCreate:        boolToStr(config.NotifyOnCreate),
+		SettingNotifyOnDestroy:       boolToStr(config.NotifyOnDestroy),
+		SettingNotifyOnHealthy:       boolToStr(config.NotifyOnHealthy),
+		SettingNotifyOnUnhealthy:     boolToStr(config.NotifyOnUnhealthy),
 	})
 }

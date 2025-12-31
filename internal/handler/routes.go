@@ -282,6 +282,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/settings/bark/test",
 				Handler: settings.BarkTestHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/settings/container-events",
+				Handler: settings.ContainerEventGetHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/settings/container-events",
+				Handler: settings.ContainerEventSaveHandler(serverCtx),
+			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),

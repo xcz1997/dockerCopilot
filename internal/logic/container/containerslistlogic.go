@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -20,6 +21,20 @@ type ContainersListLogic struct {
 	svcCtx *svc.ServiceContext
 }
 
+// PortMapping 端口映射信息
+type PortMapping struct {
+	HostIP        string `json:"hostIP,omitempty"`        // 主机 IP
+	HostPort      string `json:"hostPort"`                // 主机端口
+	ContainerPort string `json:"containerPort"`           // 容器端口
+	Protocol      string `json:"protocol"`                // 协议 tcp/udp
+}
+
+// NetworkInfo 网络信息
+type NetworkInfo struct {
+	Name      string `json:"name"`                // 网络名称
+	IPAddress string `json:"ipAddress,omitempty"` // IP 地址
+}
+
 type Info struct {
 	Id          string `json:"id"`
 	Status      string `json:"status"`
@@ -33,6 +48,10 @@ type Info struct {
 	// Compose 相关信息
 	ComposeProject string `json:"composeProject,omitempty"`
 	ComposeService string `json:"composeService,omitempty"`
+	// 网络相关信息
+	Ports       []PortMapping `json:"ports,omitempty"`       // 端口映射列表
+	NetworkMode string        `json:"networkMode,omitempty"` // 网络模式
+	Networks    []NetworkInfo `json:"networks,omitempty"`    // 网络列表（含 IP）
 }
 
 func NewContainersListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ContainersListLogic {
@@ -109,6 +128,32 @@ func (l *ContainersListLogic) ContainersList() (resp *types.Resp, err error) {
 		// 提取 Compose 信息
 		containerInfo.ComposeProject = v.Labels["com.docker.compose.project"]
 		containerInfo.ComposeService = v.Labels["com.docker.compose.service"]
+
+		// 提取端口映射信息
+		for _, port := range v.Ports {
+			if port.PublicPort > 0 {
+				containerInfo.Ports = append(containerInfo.Ports, PortMapping{
+					HostIP:        port.IP,
+					HostPort:      fmt.Sprintf("%d", port.PublicPort),
+					ContainerPort: fmt.Sprintf("%d", port.PrivatePort),
+					Protocol:      port.Type,
+				})
+			}
+		}
+
+		// 提取网络模式和网络信息
+		if containerInspect.HostConfig != nil {
+			containerInfo.NetworkMode = string(containerInspect.HostConfig.NetworkMode)
+		}
+		if containerInspect.NetworkSettings != nil && containerInspect.NetworkSettings.Networks != nil {
+			for networkName, network := range containerInspect.NetworkSettings.Networks {
+				containerInfo.Networks = append(containerInfo.Networks, NetworkInfo{
+					Name:      networkName,
+					IPAddress: network.IPAddress,
+				})
+			}
+		}
+
 		containerInfoList = append(containerInfoList, containerInfo)
 	}
 	resp.Data = containerInfoList

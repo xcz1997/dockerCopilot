@@ -31,6 +31,21 @@ const barkLoading = ref(false)
 const barkSaving = ref(false)
 const barkTesting = ref(false)
 
+// 容器事件通知配置
+const containerEventConfig = ref({
+  enabled: false,
+  notifyOnStart: false,
+  notifyOnStop: false,
+  notifyOnDie: true,
+  notifyOnRestart: false,
+  notifyOnCreate: false,
+  notifyOnDestroy: false,
+  notifyOnHealthy: false,
+  notifyOnUnhealthy: true
+})
+const containerEventLoading = ref(false)
+const containerEventSaving = ref(false)
+
 async function fetchVersion() {
   loading.value = true
   try {
@@ -119,6 +134,46 @@ async function testBark() {
   }
 }
 
+async function fetchContainerEventConfig() {
+  containerEventLoading.value = true
+  try {
+    const response = await api.settings.getContainerEvents()
+    if (response.code === 200) {
+      containerEventConfig.value = {
+        enabled: response.data.enabled || false,
+        notifyOnStart: response.data.notifyOnStart || false,
+        notifyOnStop: response.data.notifyOnStop || false,
+        notifyOnDie: response.data.notifyOnDie || false,
+        notifyOnRestart: response.data.notifyOnRestart || false,
+        notifyOnCreate: response.data.notifyOnCreate || false,
+        notifyOnDestroy: response.data.notifyOnDestroy || false,
+        notifyOnHealthy: response.data.notifyOnHealthy || false,
+        notifyOnUnhealthy: response.data.notifyOnUnhealthy || false
+      }
+    }
+  } catch (e) {
+    console.error('获取容器事件配置失败:', e)
+  } finally {
+    containerEventLoading.value = false
+  }
+}
+
+async function saveContainerEventConfig() {
+  containerEventSaving.value = true
+  try {
+    const response = await api.settings.saveContainerEvents(containerEventConfig.value)
+    if (response.code === 200) {
+      toastStore.success('保存成功')
+    } else {
+      toastStore.error(response.msg || '保存失败')
+    }
+  } catch (e) {
+    toastStore.error('保存失败: ' + e.message)
+  } finally {
+    containerEventSaving.value = false
+  }
+}
+
 async function handleUpdate() {
   // Docker 环境检查
   if (version.value?.isDocker) {
@@ -162,6 +217,7 @@ async function handleUpdate() {
 onMounted(() => {
   fetchVersion()
   fetchBarkConfig()
+  fetchContainerEventConfig()
 })
 </script>
 
@@ -409,6 +465,147 @@ onMounted(() => {
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
             {{ barkTesting ? '发送中...' : '发送测试' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 容器状态变化通知 -->
+    <div class="card p-6">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+          容器状态变化通知
+        </div>
+      </h3>
+      <p class="text-gray-500 dark:text-gray-400 mb-4">
+        监控容器状态变化事件，在容器启动、停止、异常退出等情况时发送通知。需要先配置好 Bark 推送。
+      </p>
+
+      <div v-if="containerEventLoading" class="flex items-center gap-2 text-gray-500 py-4">
+        <svg class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+        加载配置...
+      </div>
+
+      <div v-else class="space-y-4">
+        <!-- 总开关 -->
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="font-medium text-gray-900 dark:text-white">启用状态监控</label>
+            <p class="text-sm text-gray-500 dark:text-gray-400">开启后将监控容器状态变化并发送通知</p>
+          </div>
+          <button
+            @click="containerEventConfig.enabled = !containerEventConfig.enabled"
+            :class="[
+              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+              containerEventConfig.enabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+            ]"
+          >
+            <span
+              :class="[
+                'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                containerEventConfig.enabled ? 'translate-x-6' : 'translate-x-1'
+              ]"
+            />
+          </button>
+        </div>
+
+        <!-- 事件类型选择 -->
+        <div v-if="containerEventConfig.enabled" class="space-y-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+          <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">选择需要通知的事件类型：</p>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- 启动 -->
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 cursor-pointer transition-colors">
+              <input type="checkbox" v-model="containerEventConfig.notifyOnStart" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+              <div>
+                <span class="font-medium text-gray-900 dark:text-white">容器启动</span>
+                <p class="text-xs text-gray-500 dark:text-gray-400">容器启动时通知</p>
+              </div>
+            </label>
+
+            <!-- 停止 -->
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 cursor-pointer transition-colors">
+              <input type="checkbox" v-model="containerEventConfig.notifyOnStop" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+              <div>
+                <span class="font-medium text-gray-900 dark:text-white">容器停止</span>
+                <p class="text-xs text-gray-500 dark:text-gray-400">容器正常停止时通知</p>
+              </div>
+            </label>
+
+            <!-- 异常退出 -->
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 cursor-pointer transition-colors">
+              <input type="checkbox" v-model="containerEventConfig.notifyOnDie" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+              <div>
+                <span class="font-medium text-gray-900 dark:text-white">异常退出</span>
+                <p class="text-xs text-gray-500 dark:text-gray-400">容器异常退出时通知（推荐）</p>
+              </div>
+            </label>
+
+            <!-- 重启 -->
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 cursor-pointer transition-colors">
+              <input type="checkbox" v-model="containerEventConfig.notifyOnRestart" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+              <div>
+                <span class="font-medium text-gray-900 dark:text-white">容器重启</span>
+                <p class="text-xs text-gray-500 dark:text-gray-400">容器重启时通知</p>
+              </div>
+            </label>
+
+            <!-- 创建 -->
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 cursor-pointer transition-colors">
+              <input type="checkbox" v-model="containerEventConfig.notifyOnCreate" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+              <div>
+                <span class="font-medium text-gray-900 dark:text-white">容器创建</span>
+                <p class="text-xs text-gray-500 dark:text-gray-400">新容器创建时通知</p>
+              </div>
+            </label>
+
+            <!-- 删除 -->
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 cursor-pointer transition-colors">
+              <input type="checkbox" v-model="containerEventConfig.notifyOnDestroy" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+              <div>
+                <span class="font-medium text-gray-900 dark:text-white">容器删除</span>
+                <p class="text-xs text-gray-500 dark:text-gray-400">容器被删除时通知</p>
+              </div>
+            </label>
+
+            <!-- 健康检查通过 -->
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 cursor-pointer transition-colors">
+              <input type="checkbox" v-model="containerEventConfig.notifyOnHealthy" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+              <div>
+                <span class="font-medium text-gray-900 dark:text-white">健康检查通过</span>
+                <p class="text-xs text-gray-500 dark:text-gray-400">容器健康检查通过时通知</p>
+              </div>
+            </label>
+
+            <!-- 健康检查失败 -->
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 cursor-pointer transition-colors">
+              <input type="checkbox" v-model="containerEventConfig.notifyOnUnhealthy" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+              <div>
+                <span class="font-medium text-gray-900 dark:text-white">健康检查失败</span>
+                <p class="text-xs text-gray-500 dark:text-gray-400">容器健康检查失败时通知（推荐）</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- 保存按钮 -->
+        <div class="flex gap-3 pt-2">
+          <button
+            @click="saveContainerEventConfig"
+            :disabled="containerEventSaving"
+            class="btn btn-primary"
+          >
+            <svg v-if="containerEventSaving" class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            {{ containerEventSaving ? '保存中...' : '保存配置' }}
           </button>
         </div>
       </div>

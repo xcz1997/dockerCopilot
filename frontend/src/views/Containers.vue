@@ -508,6 +508,35 @@ onMounted(() => {
               <span class="truncate">{{ container.usingImage }}</span>
             </div>
 
+            <!-- 网络信息 - 端口映射、网络模式、IP -->
+            <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+              <!-- 端口映射 -->
+              <div v-if="container.ports?.length" class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span class="truncate">
+                  {{ container.ports.map(p => `${p.hostPort}:${p.containerPort}`).join(', ') }}
+                </span>
+              </div>
+              <!-- 网络模式 -->
+              <div v-if="container.networkMode" class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                </svg>
+                <span>{{ container.networkMode }}</span>
+              </div>
+              <!-- IP 地址 -->
+              <div v-if="container.networks?.length" class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                </svg>
+                <span class="truncate">
+                  {{ container.networks.filter(n => n.ipAddress).map(n => n.ipAddress).join(', ') || '-' }}
+                </span>
+              </div>
+            </div>
+
             <!-- 时间信息 - 仅在较大屏幕显示 -->
             <div class="hidden sm:flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-500 dark:text-gray-400">
               <div class="flex items-center gap-1.5">

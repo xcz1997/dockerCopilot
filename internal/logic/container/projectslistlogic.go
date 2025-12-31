@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -38,12 +39,15 @@ type ProjectInfo struct {
 }
 
 type ServiceInfo struct {
-	Name          string `json:"name"`
-	ContainerId   string `json:"containerId"`
-	ContainerName string `json:"containerName"`
-	Status        string `json:"status"`
-	Image         string `json:"image"`
-	HaveUpdate    bool   `json:"haveUpdate"`
+	Name          string        `json:"name"`
+	ContainerId   string        `json:"containerId"`
+	ContainerName string        `json:"containerName"`
+	Status        string        `json:"status"`
+	Image         string        `json:"image"`
+	HaveUpdate    bool          `json:"haveUpdate"`
+	Ports         []PortMapping `json:"ports,omitempty"`
+	NetworkMode   string        `json:"networkMode,omitempty"`
+	Networks      []NetworkInfo `json:"networks,omitempty"`
 }
 
 func (l *ProjectsListLogic) ProjectsList() (resp *types.Resp, err error) {
@@ -140,6 +144,37 @@ func (l *ProjectsListLogic) ProjectsList() (resp *types.Resp, err error) {
 			imageName = c.Image[:19] + "..."
 		}
 
+		// 提取端口映射信息
+		var ports []PortMapping
+		for _, port := range c.Ports {
+			if port.PublicPort > 0 {
+				ports = append(ports, PortMapping{
+					HostIP:        port.IP,
+					HostPort:      fmt.Sprintf("%d", port.PublicPort),
+					ContainerPort: fmt.Sprintf("%d", port.PrivatePort),
+					Protocol:      port.Type,
+				})
+			}
+		}
+
+		// 获取容器详情以提取网络信息
+		var networkMode string
+		var networks []NetworkInfo
+		containerInspect, err := l.svcCtx.DockerClient.ContainerInspect(l.ctx, c.ID)
+		if err == nil {
+			if containerInspect.HostConfig != nil {
+				networkMode = string(containerInspect.HostConfig.NetworkMode)
+			}
+			if containerInspect.NetworkSettings != nil && containerInspect.NetworkSettings.Networks != nil {
+				for netName, net := range containerInspect.NetworkSettings.Networks {
+					networks = append(networks, NetworkInfo{
+						Name:      netName,
+						IPAddress: net.IPAddress,
+					})
+				}
+			}
+		}
+
 		// 添加服务信息
 		project.Services = append(project.Services, ServiceInfo{
 			Name:          serviceName,
@@ -148,6 +183,9 @@ func (l *ProjectsListLogic) ProjectsList() (resp *types.Resp, err error) {
 			Status:        c.State,
 			Image:         imageName,
 			HaveUpdate:    haveUpdate,
+			Ports:         ports,
+			NetworkMode:   networkMode,
+			Networks:      networks,
 		})
 	}
 

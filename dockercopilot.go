@@ -90,6 +90,12 @@ func main() {
 		defer ctx.GroupScheduler.Stop()
 	}
 
+	// 启动容器事件监听器
+	if ctx.EventWatcher != nil {
+		ctx.EventWatcher.Start()
+		defer ctx.EventWatcher.Stop()
+	}
+
 	// 启动时检查镜像更新（可配置禁用）
 	if !perfConfig.DisableAutoCheck {
 		list, err := utiles.GetImagesList(ctx)

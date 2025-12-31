@@ -104,7 +104,9 @@ const api = {
   settings: {
     getBark: () => instance.get('/settings/bark'),
     saveBark: (data) => instance.post('/settings/bark', data, { headers: { 'Content-Type': 'application/json' } }),
-    testBark: (data) => instance.post('/settings/bark/test', data, { headers: { 'Content-Type': 'application/json' } })
+    testBark: (data) => instance.post('/settings/bark/test', data, { headers: { 'Content-Type': 'application/json' } }),
+    getContainerEvents: () => instance.get('/settings/container-events'),
+    saveContainerEvents: (data) => instance.post('/settings/container-events', data, { headers: { 'Content-Type': 'application/json' } })
   },
 
   tasks: {

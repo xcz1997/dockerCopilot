@@ -369,6 +369,8 @@ onMounted(() => {
                   <th class="pb-3 font-medium">服务名称</th>
                   <th class="pb-3 font-medium">容器 ID</th>
                   <th class="pb-3 font-medium">状态</th>
+                  <th class="pb-3 font-medium">端口</th>
+                  <th class="pb-3 font-medium">网络/IP</th>
                   <th class="pb-3 font-medium">镜像</th>
                   <th class="pb-3 font-medium text-right">操作</th>
                 </tr>
@@ -395,6 +397,22 @@ onMounted(() => {
                         {{ service.status === 'running' ? '运行中' : '已停止' }}
                       </span>
                     </span>
+                  </td>
+                  <td class="py-3">
+                    <span v-if="service.ports?.length" class="text-gray-600 dark:text-gray-400 text-xs">
+                      {{ service.ports.map(p => `${p.hostPort}:${p.containerPort}`).join(', ') }}
+                    </span>
+                    <span v-else class="text-gray-400">-</span>
+                  </td>
+                  <td class="py-3">
+                    <div class="text-xs">
+                      <span v-if="service.networkMode" class="text-gray-500 dark:text-gray-400">
+                        {{ service.networkMode }}
+                      </span>
+                      <span v-if="service.networks?.length" class="text-gray-600 dark:text-gray-400 block">
+                        {{ service.networks.filter(n => n.ipAddress).map(n => n.ipAddress).join(', ') || '-' }}
+                      </span>
+                    </div>
                   </td>
                   <td class="py-3">
                     <span class="text-gray-600 dark:text-gray-400 truncate max-w-[200px] block">
