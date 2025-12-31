@@ -23,19 +23,41 @@ type ImageCheckList struct {
 }
 
 type ImageUpdateData struct {
-	Data map[string]ImageCheckList
-	mu   sync.RWMutex
+	Data               map[string]ImageCheckList
+	mu                 sync.RWMutex
+	maxConcurrentCheck int // 最大并发检查数
 }
 
 const ContentDigestHeader = "Docker-Content-Digest"
 
-// 并发检测的最大 goroutine 数量
-const maxConcurrentChecks = 10
+// 默认并发检测的最大 goroutine 数量
+const defaultMaxConcurrentChecks = 10
 
 func NewImageCheck() *ImageUpdateData {
 	return &ImageUpdateData{
-		Data: map[string]ImageCheckList{},
+		Data:               map[string]ImageCheckList{},
+		maxConcurrentCheck: defaultMaxConcurrentChecks,
 	}
+}
+
+// SetMaxConcurrent 设置最大并发数
+func (i *ImageUpdateData) SetMaxConcurrent(max int) {
+	if max <= 0 {
+		max = defaultMaxConcurrentChecks
+	}
+	if max > 20 {
+		max = 20
+	}
+	i.maxConcurrentCheck = max
+	logx.Infof("镜像检查最大并发数设置为: %d", max)
+}
+
+// GetMaxConcurrent 获取最大并发数
+func (i *ImageUpdateData) GetMaxConcurrent() int {
+	if i.maxConcurrentCheck <= 0 {
+		return defaultMaxConcurrentChecks
+	}
+	return i.maxConcurrentCheck
 }
 
 // setImageCheck 线程安全地设置镜像检查结果
@@ -110,26 +132,36 @@ func (i *ImageUpdateData) CheckUpdate(imageList []types.Image) {
 		return
 	}
 
-	logx.Infof("开始并发检查 %d 个镜像的更新状态 (并发数: %d)", len(imagesToCheck), maxConcurrentChecks)
+	maxConcurrent := i.GetMaxConcurrent()
+	logx.Infof("开始检查 %d 个镜像的更新状态 (并发数: %d)", len(imagesToCheck), maxConcurrent)
 	startTime := time.Now()
 
-	// 使用带缓冲的 channel 作为信号量控制并发数
-	semaphore := make(chan struct{}, maxConcurrentChecks)
-	var wg sync.WaitGroup
+	if maxConcurrent == 1 {
+		// 单线程顺序执行（低性能模式）
+		for idx, image := range imagesToCheck {
+			logx.Debugf("检查镜像 (%d/%d): %s:%s", idx+1, len(imagesToCheck), image.ImageName, image.ImageTag)
+			i.checkSingleImage(image)
+		}
+	} else {
+		// 多线程并发执行
+		// 使用带缓冲的 channel 作为信号量控制并发数
+		semaphore := make(chan struct{}, maxConcurrent)
+		var wg sync.WaitGroup
 
-	for _, image := range imagesToCheck {
-		wg.Add(1)
-		go func(img types.Image) {
-			defer wg.Done()
-			// 获取信号量
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
+		for _, image := range imagesToCheck {
+			wg.Add(1)
+			go func(img types.Image) {
+				defer wg.Done()
+				// 获取信号量
+				semaphore <- struct{}{}
+				defer func() { <-semaphore }()
 
-			i.checkSingleImage(img)
-		}(image)
+				i.checkSingleImage(img)
+			}(image)
+		}
+
+		wg.Wait()
 	}
-
-	wg.Wait()
 	logx.Infof("镜像更新检查完成，耗时: %v", time.Since(startTime))
 }
 

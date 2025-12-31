@@ -7,3 +7,15 @@ Log:
 Auth:
   AccessSecret: ${secretKey}
   AccessExpire: 7257600
+
+# 性能配置（可选）
+# 用于低性能设备（NAS、树莓派等）优化资源占用
+# Performance:
+#   # 低性能模式：启用后所有并发操作改为顺序执行
+#   LowPowerMode: false
+#   # 镜像检查最大并发数（1-20，低性能模式自动设为1）
+#   MaxConcurrentChecks: 10
+#   # 镜像自动检查间隔（分钟，0=禁用，最大1440）
+#   CheckIntervalMinutes: 30
+#   # 禁用启动时自动检查镜像更新
+#   DisableAutoCheck: false

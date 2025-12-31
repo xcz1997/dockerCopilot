@@ -63,6 +63,23 @@ func main() {
 	defer server.Stop()
 	ctx := svc.NewServiceContext(c)
 
+	// 应用性能配置
+	perfConfig := c.Performance
+	maxConcurrent := perfConfig.GetEffectiveMaxConcurrent()
+	checkInterval := perfConfig.GetEffectiveCheckInterval()
+
+	if perfConfig.LowPowerMode {
+		logx.Info("=== 低性能模式已启用 ===")
+		logx.Infof("  - 镜像检查并发数: %d (单线程)", maxConcurrent)
+		logx.Infof("  - 镜像检查间隔: %d 分钟", checkInterval)
+		logx.Infof("  - 启动时检查: %v", !perfConfig.DisableAutoCheck)
+	} else {
+		logx.Infof("性能配置: 并发数=%d, 检查间隔=%d分钟", maxConcurrent, checkInterval)
+	}
+
+	// 设置镜像检查并发数
+	ctx.HubImageInfo.SetMaxConcurrent(maxConcurrent)
+
 	// 启动群组调度器
 	if ctx.GroupScheduler != nil {
 		// 设置进度更新器，让群组更新操作能在任务列表中显示
@@ -73,29 +90,60 @@ func main() {
 		defer ctx.GroupScheduler.Stop()
 	}
 
-	list, err := utiles.GetImagesList(ctx)
-	if err != nil {
-		logx.Errorf("panic获取镜像列表出错: %v", err)
-		panic(err)
-	}
-	go ctx.HubImageInfo.CheckUpdate(list)
-	corndanmu := cron.New(cron.WithParser(cron.NewParser(
-		cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow,
-	)))
-	_, err = corndanmu.AddFunc("30 * * * *", func() {
+	// 启动时检查镜像更新（可配置禁用）
+	if !perfConfig.DisableAutoCheck {
 		list, err := utiles.GetImagesList(ctx)
 		if err != nil {
-			logx.Errorf("panic获取镜像列表出错: %v", err)
-			panic(err)
+			logx.Errorf("获取镜像列表出错: %v", err)
+		} else {
+			if perfConfig.LowPowerMode {
+				// 低性能模式：同步执行，避免启动时资源竞争
+				logx.Info("低性能模式：同步检查镜像更新...")
+				ctx.HubImageInfo.CheckUpdate(list)
+			} else {
+				// 正常模式：异步执行
+				go ctx.HubImageInfo.CheckUpdate(list)
+			}
 		}
-		ctx.HubImageInfo.CheckUpdate(list)
-	})
-	if err != nil {
-		logx.Errorf("panic添加定时任务出错: %v", err)
-		panic(err)
+	} else {
+		logx.Info("启动时镜像更新检查已禁用")
 	}
-	corndanmu.Start()
-	defer corndanmu.Stop()
+
+	// 定时镜像检查任务（可配置间隔或禁用）
+	var corndanmu *cron.Cron
+	if checkInterval > 0 {
+		corndanmu = cron.New(cron.WithParser(cron.NewParser(
+			cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow,
+		)))
+		// 构建 cron 表达式：每 N 分钟执行
+		cronExpr := fmt.Sprintf("*/%d * * * *", checkInterval)
+		if checkInterval >= 60 {
+			// 如果间隔大于等于60分钟，改为每 N 小时执行
+			hours := checkInterval / 60
+			cronExpr = fmt.Sprintf("0 */%d * * *", hours)
+		}
+		_, err = corndanmu.AddFunc(cronExpr, func() {
+			list, err := utiles.GetImagesList(ctx)
+			if err != nil {
+				logx.Errorf("定时任务获取镜像列表出错: %v", err)
+				return
+			}
+			ctx.HubImageInfo.CheckUpdate(list)
+		})
+		if err != nil {
+			logx.Errorf("添加镜像检查定时任务出错: %v", err)
+		} else {
+			corndanmu.Start()
+			logx.Infof("镜像检查定时任务已启动: %s", cronExpr)
+		}
+		defer func() {
+			if corndanmu != nil {
+				corndanmu.Stop()
+			}
+		}()
+	} else {
+		logx.Info("镜像自动检查定时任务已禁用 (CheckIntervalMinutes=0)")
+	}
 	httpx.SetErrorHandler(func(err error) (int, any) {
 		switch e := err.(type) {
 		case *errors.CodeMsg:
