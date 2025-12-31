@@ -47,6 +47,12 @@ func NewMatcher(dockerClient *client.Client) *Matcher {
 
 // GetMatchedContainers 获取群组匹配的所有容器
 func (m *Matcher) GetMatchedContainers(ctx context.Context, groupID int64) ([]MatchedContainer, error) {
+	// 获取群组信息，确定群组类型
+	group, err := model.GetGroupByID(groupID)
+	if err != nil {
+		return nil, err
+	}
+
 	// 获取所有 Docker 容器
 	containers, err := m.dockerClient.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
@@ -75,7 +81,7 @@ func (m *Matcher) GetMatchedContainers(ctx context.Context, groupID int64) ([]Ma
 		return nil, err
 	}
 
-	// 获取手动分配的容器
+	// 获取手动分配的容器/项目
 	manualContainers, err := model.GetContainersByGroupID(groupID)
 	if err != nil {
 		return nil, err
@@ -84,11 +90,21 @@ func (m *Matcher) GetMatchedContainers(ctx context.Context, groupID int64) ([]Ma
 	// 构建手动分配的容器ID映射和名称映射
 	manualMapByID := make(map[string]bool)
 	manualMapByName := make(map[string]bool)
+	// 对于项目类型群组，存储项目名称用于标签匹配
+	manualProjectNames := make(map[string]bool)
+
 	for _, mc := range manualContainers {
 		manualMapByID[mc.ContainerID] = true
 		// 同时按名称映射，用于容器更新后ID变化的情况
 		if mc.ContainerName != "" {
 			manualMapByName[mc.ContainerName] = true
+		}
+		// 对于项目类型群组，ContainerID 和 ContainerName 存储的是项目名称
+		if group.GroupType == model.GroupTypeProject {
+			manualProjectNames[mc.ContainerID] = true
+			if mc.ContainerName != "" {
+				manualProjectNames[mc.ContainerName] = true
+			}
 		}
 	}
 
@@ -144,6 +160,31 @@ func (m *Matcher) GetMatchedContainers(ctx context.Context, groupID int64) ([]Ma
 				MatchType: "manual",
 			})
 			matchedIDs[c.ID] = true
+		}
+	}
+
+	// 对于项目类型群组，通过 com.docker.compose.project 标签匹配所有属于该项目的容器
+	if group.GroupType == model.GroupTypeProject && len(manualProjectNames) > 0 {
+		for _, c := range containers {
+			if matchedIDs[c.ID] {
+				continue
+			}
+			// 检查容器的 Compose 项目标签
+			projectName := c.Labels["com.docker.compose.project"]
+			if projectName != "" && manualProjectNames[projectName] {
+				name := strings.TrimPrefix(c.Names[0], "/")
+				logx.Infof("容器[%s]通过项目标签匹配（项目: %s）", name, projectName)
+				matched = append(matched, MatchedContainer{
+					ID:        c.ID,
+					Name:      name,
+					Image:     getImageName(c.ImageID, c.Image),
+					ImageID:   c.ImageID,
+					Labels:    c.Labels,
+					State:     c.State,
+					MatchType: "manual",
+				})
+				matchedIDs[c.ID] = true
+			}
 		}
 	}
 
