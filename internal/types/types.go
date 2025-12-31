@@ -36,6 +36,12 @@ type GetProgressReq struct {
 	TaskId string `path:"taskid"`
 }
 
+type ContainerLogsReq struct {
+	Id    string `path:"id"`
+	Token string `form:"token,optional"`
+	Tail  string `form:"tail,default=100"`
+}
+
 type IdReq struct {
 	Id string `path:"id"`
 }

@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useContainersStore } from '@/stores/containers'
 import { useToastStore } from '@/stores/toast'
+import ContainerLogModal from '@/components/ContainerLogModal.vue'
 import api from '@/api'
 
 const router = useRouter()
@@ -18,6 +19,7 @@ const filterUpdate = ref(false)
 const showRenameModal = ref(false)
 const showUpdateModal = ref(false)
 const showGroupModal = ref(false)
+const showLogModal = ref(false)
 const selectedContainer = ref(null)
 const newContainerName = ref('')
 const operatingIds = ref(new Set())
@@ -269,6 +271,11 @@ function openGroupModal(container) {
   selectedGroupId.value = null
   showGroupModal.value = true
   fetchGroups()
+}
+
+function openLogModal(container) {
+  selectedContainer.value = container
+  showLogModal.value = true
 }
 
 async function handleAssignGroup() {
@@ -583,6 +590,16 @@ onMounted(() => {
             </button>
 
             <button
+              @click="openLogModal(container)"
+              class="btn btn-sm btn-ghost text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 px-2"
+              title="查看日志"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+            </button>
+
+            <button
               v-if="container.haveUpdate"
               @click="openUpdateModal(container)"
               :disabled="operatingIds.has(container.id)"
@@ -743,5 +760,13 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- 日志弹窗 -->
+    <ContainerLogModal
+      :visible="showLogModal"
+      :container-id="selectedContainer?.id || ''"
+      :container-name="selectedContainer?.name || ''"
+      @close="showLogModal = false"
+    />
   </div>
 </template>

@@ -16,6 +16,12 @@ type GetProgressReq {
 	TaskId string `path:"taskid"`
 }
 
+type ContainerLogsReq {
+	Id    string `path:"id"`
+	Token string `form:"token,optional"`
+	Tail  string `form:"tail,default=100"`
+}
+
 type StartContainerReq {
 	Name string `json:"name"`
 }
@@ -168,6 +174,9 @@ service dockerCopilot {
 service dockerCopilot {
 	@handler GetProgress
 		get /progress/:taskid (GetProgressReq) returns (Resp)
+
+	@handler ContainerLogs
+		get /container/:id/logs (ContainerLogsReq) returns (Resp)
 }
 
 @server(

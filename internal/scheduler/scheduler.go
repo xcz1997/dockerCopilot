@@ -198,9 +198,14 @@ func (s *GroupScheduler) AddJob(group model.ContainerGroup) error {
 
 	s.jobs[group.ID] = entryID
 
-	// 获取下次执行时间
+	// 获取下次执行时间（使用 Schedule.Next 手动计算，避免 cron 未 Start 时 entry.Next 为零值）
 	entry := s.cron.Entry(entryID)
-	nextRun := entry.Next.Format("2006-01-02 15:04:05")
+	var nextRun string
+	if entry.Schedule != nil {
+		nextRun = entry.Schedule.Next(time.Now()).Format("2006-01-02 15:04:05")
+	} else {
+		nextRun = "未知"
+	}
 	logx.Infof("群组[%s]定时任务已添加: cron=%s, 下次执行=%s", group.Name, cronExpr, nextRun)
 	return nil
 }

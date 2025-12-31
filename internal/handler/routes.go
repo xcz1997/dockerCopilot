@@ -156,6 +156,19 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		rest.WithPrefix("/api"),
 	)
 
+	// 容器日志 SSE 路由（不使用 JWT 中间件，handler 内部验证 token；禁用日志避免 slowcall 警告）
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/container/:id/logs",
+				Handler: progress.ContainerLogsHandler(serverCtx),
+			},
+		},
+		rest.WithPrefix("/api"),
+		rest.WithTimeout(0), // SSE 长连接不设超时
+	)
+
 	server.AddRoutes(
 		[]rest.Route{
 			{
