@@ -13,6 +13,7 @@ import (
 	image "github.com/xcz1997/dockerCopilot/internal/handler/image"
 	progress "github.com/xcz1997/dockerCopilot/internal/handler/progress"
 	"github.com/xcz1997/dockerCopilot/internal/handler/settings"
+	"github.com/xcz1997/dockerCopilot/internal/handler/system"
 	version "github.com/xcz1997/dockerCopilot/internal/handler/version"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 
@@ -425,6 +426,19 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodPost,
 				Path:    "/environment/:id/refresh",
 				Handler: environment.EnvironmentRefreshHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	// 系统信息路由
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/system/info",
+				Handler: system.SystemInfoHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

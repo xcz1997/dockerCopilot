@@ -228,7 +228,41 @@ func (c *RemoteClient) GetStats() (*model.EnvironmentStats, error) {
 		}
 	}
 
+	// 获取系统信息（Volume、CPU、内存）
+	sysInfo, err := c.GetSystemInfo()
+	if err == nil && sysInfo != nil {
+		stats.VolumeCount = sysInfo.VolumeCount
+		stats.CPUCores = sysInfo.CPUCores
+		stats.MemoryTotal = sysInfo.MemoryTotal
+	}
+
 	return stats, nil
+}
+
+// SystemInfo 系统信息结构
+type SystemInfo struct {
+	VolumeCount int   `json:"volumeCount"`
+	CPUCores    int   `json:"cpuCores"`
+	MemoryTotal int64 `json:"memoryTotal"`
+}
+
+// GetSystemInfo 获取远程系统信息
+func (c *RemoteClient) GetSystemInfo() (*SystemInfo, error) {
+	resp, err := c.doRequest("GET", "/api/system/info", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != 200 {
+		return nil, fmt.Errorf("获取系统信息失败: %s", resp.Msg)
+	}
+
+	var info SystemInfo
+	if err := json.Unmarshal(resp.Data, &info); err != nil {
+		return nil, fmt.Errorf("解析系统信息失败: %w", err)
+	}
+
+	return &info, nil
 }
 
 // ProxyRequest 代理 HTTP 请求到远程环境

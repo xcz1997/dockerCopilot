@@ -380,3 +380,14 @@ service dockerCopilot {
 	get /environment/current returns (Resp)
 }
 
+// 系统信息
+@server(
+	prefix: /api
+	group: system
+	jwt: Auth
+)
+service dockerCopilot {
+	@handler systemInfo
+	get /system/info returns (Resp)
+}
+
