@@ -226,6 +226,49 @@ func migrate(db *sql.DB) error {
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_image_metadata_image_id ON image_metadata(image_id)`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_image_metadata_source_type ON image_metadata(source_type)`)
 
+	// 环境表
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS environments (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL UNIQUE,
+			description TEXT DEFAULT '',
+			env_type TEXT NOT NULL DEFAULT 'local',
+			url TEXT DEFAULT '',
+			secret_key TEXT DEFAULT '',
+			jwt_token TEXT DEFAULT '',
+			token_expires_at DATETIME,
+			is_default INTEGER NOT NULL DEFAULT 0,
+			status TEXT DEFAULT 'unknown',
+			last_check_at DATETIME,
+			last_error TEXT DEFAULT '',
+			container_count INTEGER DEFAULT 0,
+			running_count INTEGER DEFAULT 0,
+			stopped_count INTEGER DEFAULT 0,
+			image_count INTEGER DEFAULT 0,
+			volume_count INTEGER DEFAULT 0,
+			cpu_cores INTEGER DEFAULT 0,
+			memory_total INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// 添加新字段（兼容旧数据库）
+	_, _ = db.Exec(`ALTER TABLE environments ADD COLUMN volume_count INTEGER DEFAULT 0`)
+	_, _ = db.Exec(`ALTER TABLE environments ADD COLUMN cpu_cores INTEGER DEFAULT 0`)
+	_, _ = db.Exec(`ALTER TABLE environments ADD COLUMN memory_total INTEGER DEFAULT 0`)
+	if err != nil {
+		return err
+	}
+
+	// 创建环境索引
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_environments_env_type ON environments(env_type)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_environments_is_default ON environments(is_default)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_environments_status ON environments(status)`)
+
 	return nil
 }
 

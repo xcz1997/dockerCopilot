@@ -253,3 +253,30 @@ type PrivateRegistryTestReq struct {
 	Password string `json:"password,optional"` // 密码
 	Insecure bool   `json:"insecure,optional"` // 是否允许不安全连接
 }
+
+// ======== 环境管理类型 ========
+
+type EnvironmentCreateReq struct {
+	Name        string `json:"name"`
+	Description string `json:"description,optional"`
+	EnvType     string `json:"envType,default=remote"`
+	URL         string `json:"url,optional"`
+	SecretKey   string `json:"secretKey,optional"`
+}
+
+type EnvironmentUpdateReq struct {
+	Id          int64  `path:"id"`
+	Name        string `json:"name,optional"`
+	Description string `json:"description,optional"`
+	URL         string `json:"url,optional"`
+	SecretKey   string `json:"secretKey,optional"`
+}
+
+type EnvironmentIdReq struct {
+	Id int64 `path:"id"`
+}
+
+type EnvironmentTestReq struct {
+	URL       string `json:"url"`
+	SecretKey string `json:"secretKey"`
+}

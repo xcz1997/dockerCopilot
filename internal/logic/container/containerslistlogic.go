@@ -2,11 +2,13 @@ package container
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/image"
+	"github.com/xcz1997/dockerCopilot/internal/model"
 	"github.com/xcz1997/dockerCopilot/internal/module"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 	"github.com/xcz1997/dockerCopilot/internal/types"
@@ -63,8 +65,14 @@ func NewContainersListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Co
 }
 
 func (l *ContainersListLogic) ContainersList() (resp *types.Resp, err error) {
-	// 获取所有容器（包括停止的容器）
 	resp = &types.Resp{}
+
+	// 检查是否为远程环境
+	if l.svcCtx.CurrentEnvironment != nil && l.svcCtx.CurrentEnvironment.EnvType == model.EnvTypeRemote {
+		return l.getRemoteContainers()
+	}
+
+	// 本地环境：获取所有容器（包括停止的容器）
 	list, err := utiles.GetContainerList(l.svcCtx)
 	if err != nil {
 		resp.Code = 500
@@ -157,5 +165,40 @@ func (l *ContainersListLogic) ContainersList() (resp *types.Resp, err error) {
 		containerInfoList = append(containerInfoList, containerInfo)
 	}
 	resp.Data = containerInfoList
+	return resp, nil
+}
+
+// getRemoteContainers 从远程环境获取容器列表
+func (l *ContainersListLogic) getRemoteContainers() (resp *types.Resp, err error) {
+	resp = &types.Resp{}
+
+	// 获取或创建远程客户端
+	client := l.svcCtx.RemoteClient
+	if client == nil {
+		env := l.svcCtx.CurrentEnvironment
+		client = module.NewRemoteClientWithToken(env.URL, env.SecretKey, env.JWTToken)
+	}
+
+	// 从远程获取容器列表
+	data, err := client.ProxyRequest("GET", "/api/containers", nil)
+	if err != nil {
+		resp.Code = 500
+		resp.Msg = "获取远程容器列表失败: " + err.Error()
+		resp.Data = []interface{}{}
+		return resp, nil
+	}
+
+	// 解析远程返回的数据
+	var containers []Info
+	if err := json.Unmarshal(data, &containers); err != nil {
+		resp.Code = 500
+		resp.Msg = "解析远程容器数据失败: " + err.Error()
+		resp.Data = []interface{}{}
+		return resp, nil
+	}
+
+	resp.Code = 200
+	resp.Msg = "success"
+	resp.Data = containers
 	return resp, nil
 }

@@ -17,7 +17,12 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: '/containers'
+          redirect: '/environments'
+        },
+        {
+          path: 'environments',
+          name: 'environments',
+          component: () => import('@/views/Environments.vue')
         },
         {
           path: 'containers',

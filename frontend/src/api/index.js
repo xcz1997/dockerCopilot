@@ -135,6 +135,19 @@ const api = {
 
   projects: {
     list: () => instance.get('/projects')
+  },
+
+  environments: {
+    list: () => instance.get('/environments'),
+    get: (id) => instance.get(`/environment/${id}`),
+    create: (data) => instance.post('/environment', data, { headers: { 'Content-Type': 'application/json' } }),
+    update: (id, data) => instance.put(`/environment/${id}`, data, { headers: { 'Content-Type': 'application/json' } }),
+    delete: (id) => instance.delete(`/environment/${id}`),
+    test: (data) => instance.post('/environment/test', data, { headers: { 'Content-Type': 'application/json' } }),
+    connect: (id) => instance.post(`/environment/${id}/connect`),
+    setDefault: (id) => instance.post(`/environment/${id}/default`),
+    refresh: (id) => instance.post(`/environment/${id}/refresh`),
+    current: () => instance.get('/environment/current')
   }
 }
 

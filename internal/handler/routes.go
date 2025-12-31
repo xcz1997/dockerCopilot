@@ -8,6 +8,7 @@ import (
 
 	auth "github.com/xcz1997/dockerCopilot/internal/handler/auth"
 	container "github.com/xcz1997/dockerCopilot/internal/handler/container"
+	"github.com/xcz1997/dockerCopilot/internal/handler/environment"
 	"github.com/xcz1997/dockerCopilot/internal/handler/group"
 	image "github.com/xcz1997/dockerCopilot/internal/handler/image"
 	progress "github.com/xcz1997/dockerCopilot/internal/handler/progress"
@@ -366,6 +367,64 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodPost,
 				Path:    "/settings/private-registry/test",
 				Handler: settings.PrivateRegistryTestHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	// 环境管理路由
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/environments",
+				Handler: environment.EnvironmentListHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/environment/current",
+				Handler: environment.EnvironmentCurrentHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/environment/:id",
+				Handler: environment.EnvironmentGetHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/environment",
+				Handler: environment.EnvironmentCreateHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/environment/:id",
+				Handler: environment.EnvironmentUpdateHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/environment/:id",
+				Handler: environment.EnvironmentDeleteHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/environment/test",
+				Handler: environment.EnvironmentTestHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/environment/:id/connect",
+				Handler: environment.EnvironmentConnectHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/environment/:id/default",
+				Handler: environment.EnvironmentSetDefaultHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/environment/:id/refresh",
+				Handler: environment.EnvironmentRefreshHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

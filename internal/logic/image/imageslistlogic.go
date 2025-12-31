@@ -2,9 +2,11 @@ package image
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/xcz1997/dockerCopilot/internal/model"
+	"github.com/xcz1997/dockerCopilot/internal/module"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 	"github.com/xcz1997/dockerCopilot/internal/types"
 	"github.com/xcz1997/dockerCopilot/internal/utiles"
@@ -41,6 +43,13 @@ func NewImagesListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Images
 
 func (l *ImagesListLogic) ImagesList() (resp *types.Resp, err error) {
 	resp = &types.Resp{}
+
+	// 检查是否为远程环境
+	if l.svcCtx.CurrentEnvironment != nil && l.svcCtx.CurrentEnvironment.EnvType == model.EnvTypeRemote {
+		return l.getRemoteImages()
+	}
+
+	// 本地环境
 	list, err := utiles.GetImagesList(l.svcCtx)
 	if err != nil {
 		resp.Code = 500
@@ -90,5 +99,40 @@ func (l *ImagesListLogic) ImagesList() (resp *types.Resp, err error) {
 		imageInfoList = append(imageInfoList, imageInfo)
 	}
 	resp.Data = imageInfoList
+	return resp, nil
+}
+
+// getRemoteImages 从远程环境获取镜像列表
+func (l *ImagesListLogic) getRemoteImages() (resp *types.Resp, err error) {
+	resp = &types.Resp{}
+
+	// 获取或创建远程客户端
+	client := l.svcCtx.RemoteClient
+	if client == nil {
+		env := l.svcCtx.CurrentEnvironment
+		client = module.NewRemoteClientWithToken(env.URL, env.SecretKey, env.JWTToken)
+	}
+
+	// 从远程获取镜像列表
+	data, err := client.ProxyRequest("GET", "/api/images", nil)
+	if err != nil {
+		resp.Code = 500
+		resp.Msg = "获取远程镜像列表失败: " + err.Error()
+		resp.Data = []interface{}{}
+		return resp, nil
+	}
+
+	// 解析远程返回的数据
+	var images []Info
+	if err := json.Unmarshal(data, &images); err != nil {
+		resp.Code = 500
+		resp.Msg = "解析远程镜像数据失败: " + err.Error()
+		resp.Data = []interface{}{}
+		return resp, nil
+	}
+
+	resp.Code = 200
+	resp.Msg = "success"
+	resp.Data = images
 	return resp, nil
 }

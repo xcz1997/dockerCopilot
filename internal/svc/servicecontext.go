@@ -1,11 +1,15 @@
 package svc
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/xcz1997/dockerCopilot/internal/config"
 	"github.com/xcz1997/dockerCopilot/internal/model"
@@ -64,6 +68,8 @@ type ServiceContext struct {
 	GroupScheduler             *scheduler.GroupScheduler
 	EventWatcher               *module.ContainerEventWatcher
 	PerformanceConfig          *model.PerformanceConfig // 性能配置（从数据库加载）
+	CurrentEnvironment         *model.Environment       // 当前选中的环境
+	RemoteClient               *module.RemoteClient     // 远程客户端（当前环境为远程时使用）
 	mu                         sync.Mutex
 }
 
@@ -134,7 +140,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 创建容器事件监听器
 	eventWatcher := module.NewContainerEventWatcher(cli)
 
-	return &ServiceContext{
+	svcCtx := &ServiceContext{
 		Config:            c,
 		HubImageInfo:      hubImageInfo,
 		ProgressStore:     make(ProgressStoreType),
@@ -144,6 +150,115 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		EventWatcher:      eventWatcher,
 		PerformanceConfig: perfConfig,
 	}
+
+	// 确保本地环境存在
+	if err := model.EnsureLocalEnvironment(); err != nil {
+		logx.Errorf("确保本地环境存在失败: %s", err)
+	}
+
+	// 设置当前环境为默认环境
+	defaultEnv, err := model.GetDefaultEnvironment()
+	if err != nil {
+		// 如果没有默认环境，获取本地环境
+		localEnv, _ := model.GetLocalEnvironment()
+		if localEnv != nil {
+			svcCtx.CurrentEnvironment = localEnv
+		}
+	} else {
+		svcCtx.CurrentEnvironment = defaultEnv
+	}
+
+	// 初始化本地环境统计
+	go svcCtx.initLocalEnvironmentStats()
+
+	return svcCtx
+}
+
+// initLocalEnvironmentStats 初始化本地环境统计信息
+func (ctx *ServiceContext) initLocalEnvironmentStats() {
+	localEnv, err := model.GetLocalEnvironment()
+	if err != nil || localEnv == nil {
+		return
+	}
+
+	stats, err := ctx.GetLocalStats()
+	if err != nil {
+		logx.Errorf("获取本地统计信息失败: %v", err)
+		return
+	}
+
+	if err := model.UpdateEnvironmentStats(localEnv.ID, stats); err != nil {
+		logx.Errorf("更新本地环境统计失败: %v", err)
+	}
+}
+
+// SwitchToEnvironment 切换到指定环境
+func (ctx *ServiceContext) SwitchToEnvironment(env *model.Environment) {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+
+	ctx.CurrentEnvironment = env
+
+	// 如果是远程环境，创建远程客户端
+	if env.EnvType == model.EnvTypeRemote {
+		ctx.RemoteClient = module.NewRemoteClientWithToken(env.URL, env.SecretKey, env.JWTToken)
+	} else {
+		ctx.RemoteClient = nil
+	}
+}
+
+// GetLocalStats 获取本地 Docker 环境的统计信息
+func (ctx *ServiceContext) GetLocalStats() (*model.EnvironmentStats, error) {
+	if ctx.DockerClient == nil {
+		return nil, nil
+	}
+
+	// 获取容器列表
+	containers, err := ctx.DockerClient.ContainerList(context.Background(), container.ListOptions{All: true})
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取镜像列表
+	images, err := ctx.DockerClient.ImageList(context.Background(), image.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取 Volume 列表
+	volumes, err := ctx.DockerClient.VolumeList(context.Background(), volume.ListOptions{})
+	volumeCount := 0
+	if err == nil {
+		volumeCount = len(volumes.Volumes)
+	}
+
+	// 获取系统信息（CPU、内存）
+	info, err := ctx.DockerClient.Info(context.Background())
+	cpuCores := 0
+	var memoryTotal int64 = 0
+	if err == nil {
+		cpuCores = info.NCPU
+		memoryTotal = info.MemTotal
+	}
+
+	stats := &model.EnvironmentStats{
+		ContainerCount: len(containers),
+		ImageCount:     len(images),
+		VolumeCount:    volumeCount,
+		CPUCores:       cpuCores,
+		MemoryTotal:    memoryTotal,
+	}
+
+	// 计算运行中和停止的容器
+	for _, c := range containers {
+		if c.State == "running" {
+			stats.RunningCount++
+		} else {
+			stats.StoppedCount++
+		}
+	}
+
+	return stats, nil
 }
 
 // UpdatePerformanceConfig 更新性能配置缓存

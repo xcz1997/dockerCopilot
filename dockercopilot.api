@@ -314,3 +314,69 @@ service dockerCopilot {
 	post /group/:id/stop (GroupIdReq) returns (Resp)
 }
 
+// ======== 环境管理类型定义 ========
+
+type EnvironmentCreateReq {
+	Name        string `json:"name"`
+	Description string `json:"description,optional"`
+	EnvType     string `json:"envType,default=remote"`
+	URL         string `json:"url,optional"`
+	SecretKey   string `json:"secretKey,optional"`
+}
+
+type EnvironmentUpdateReq {
+	Id          int64  `path:"id"`
+	Name        string `json:"name,optional"`
+	Description string `json:"description,optional"`
+	URL         string `json:"url,optional"`
+	SecretKey   string `json:"secretKey,optional"`
+}
+
+type EnvironmentIdReq {
+	Id int64 `path:"id"`
+}
+
+type EnvironmentTestReq {
+	URL       string `json:"url"`
+	SecretKey string `json:"secretKey"`
+}
+
+// ======== 环境管理路由 ========
+
+@server(
+	prefix: /api
+	group: environment
+	jwt: Auth
+)
+service dockerCopilot {
+	@handler environmentList
+	get /environments returns (Resp)
+
+	@handler environmentGet
+	get /environment/:id (EnvironmentIdReq) returns (Resp)
+
+	@handler environmentCreate
+	post /environment (EnvironmentCreateReq) returns (Resp)
+
+	@handler environmentUpdate
+	put /environment/:id (EnvironmentUpdateReq) returns (Resp)
+
+	@handler environmentDelete
+	delete /environment/:id (EnvironmentIdReq) returns (Resp)
+
+	@handler environmentTest
+	post /environment/test (EnvironmentTestReq) returns (Resp)
+
+	@handler environmentConnect
+	post /environment/:id/connect (EnvironmentIdReq) returns (Resp)
+
+	@handler environmentSetDefault
+	post /environment/:id/default (EnvironmentIdReq) returns (Resp)
+
+	@handler environmentRefresh
+	post /environment/:id/refresh (EnvironmentIdReq) returns (Resp)
+
+	@handler environmentCurrent
+	get /environment/current returns (Resp)
+}
+
