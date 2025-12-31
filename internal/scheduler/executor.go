@@ -1,7 +1,9 @@
 package scheduler
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -13,6 +15,266 @@ import (
 	"github.com/xcz1997/dockerCopilot/internal/module"
 	"github.com/zeromicro/go-zero/core/logx"
 )
+
+// dockerPullProgress Docker 镜像拉取进度结构
+type dockerPullProgress struct {
+	Status         string                 `json:"status"`
+	ID             string                 `json:"id"`
+	Progress       string                 `json:"progress"`
+	ProgressDetail dockerProgressDetail   `json:"progressDetail"`
+	Error          string                 `json:"error,omitempty"`
+}
+
+// dockerProgressDetail 进度详情
+type dockerProgressDetail struct {
+	Current int64 `json:"current"`
+	Total   int64 `json:"total"`
+}
+
+// layerProgress 单层进度
+// Docker 拉取镜像的阶段顺序:
+// Pulling fs layer -> Waiting -> Downloading -> Download complete ->
+// Verifying Checksum -> Extracting -> Pull complete
+// 或者: Already exists (跳过下载)
+type layerProgress struct {
+	Status          string // 当前状态
+	DownloadCurrent int64  // 下载进度
+	DownloadTotal   int64  // 下载总量
+	ExtractCurrent  int64  // 解压进度
+	ExtractTotal    int64  // 解压总量
+	IsComplete      bool   // 是否完成
+}
+
+// getLayerPhaseWeight 获取层阶段权重 (用于计算整体进度)
+// 下载占 50%，解压占 50%
+func (l *layerProgress) getProgress() float64 {
+	if l.IsComplete {
+		return 1.0
+	}
+
+	var downloadPct, extractPct float64
+
+	// 下载进度 (占总进度的50%)
+	if l.DownloadTotal > 0 {
+		downloadPct = float64(l.DownloadCurrent) / float64(l.DownloadTotal)
+	} else if l.Status == "Download complete" || l.Status == "Verifying Checksum" ||
+		l.Status == "Extracting" || l.Status == "Pull complete" || l.Status == "Already exists" {
+		downloadPct = 1.0
+	}
+
+	// 解压进度 (占总进度的50%)
+	if l.ExtractTotal > 0 {
+		extractPct = float64(l.ExtractCurrent) / float64(l.ExtractTotal)
+	} else if l.Status == "Pull complete" || l.Status == "Already exists" {
+		extractPct = 1.0
+	}
+
+	return downloadPct*0.5 + extractPct*0.5
+}
+
+// parsePullProgress 解析镜像拉取进度并调用回调
+// startPct: 开始百分比（如30）
+// endPct: 结束百分比（如60）
+// onProgress: 进度回调
+func parsePullProgress(pullOut io.Reader, startPct, endPct int, onProgress ProgressCallback) {
+	if onProgress == nil {
+		// 无回调时直接读取完成
+		_, _ = io.Copy(io.Discard, pullOut)
+		return
+	}
+
+	layers := make(map[string]*layerProgress)
+	scanner := bufio.NewScanner(pullOut)
+	// 增大 scanner 缓冲区以处理长行
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
+	lastReportTime := time.Now()
+	reportInterval := 200 * time.Millisecond // 限制更新频率
+
+	// 保存最后一条有效的进度信息用于显示
+	var lastProgress dockerPullProgress
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var progress dockerPullProgress
+		if err := json.Unmarshal(line, &progress); err != nil {
+			continue
+		}
+
+		// 处理错误
+		if progress.Error != "" {
+			onProgress(endPct, "拉取失败", progress.Error)
+			return
+		}
+
+		// 更新层进度
+		if progress.ID != "" {
+			layer, exists := layers[progress.ID]
+			if !exists {
+				layer = &layerProgress{}
+				layers[progress.ID] = layer
+			}
+
+			layer.Status = progress.Status
+
+			// 根据状态更新对应的进度
+			switch progress.Status {
+			case "Downloading":
+				if progress.ProgressDetail.Total > 0 {
+					layer.DownloadCurrent = progress.ProgressDetail.Current
+					layer.DownloadTotal = progress.ProgressDetail.Total
+				}
+			case "Download complete":
+				layer.DownloadCurrent = layer.DownloadTotal
+				if layer.DownloadTotal == 0 {
+					layer.DownloadTotal = 1
+					layer.DownloadCurrent = 1
+				}
+			case "Extracting":
+				// 下载已完成
+				layer.DownloadCurrent = layer.DownloadTotal
+				if layer.DownloadTotal == 0 {
+					layer.DownloadTotal = 1
+					layer.DownloadCurrent = 1
+				}
+				// 更新解压进度
+				if progress.ProgressDetail.Total > 0 {
+					layer.ExtractCurrent = progress.ProgressDetail.Current
+					layer.ExtractTotal = progress.ProgressDetail.Total
+				}
+			case "Pull complete":
+				layer.IsComplete = true
+				layer.DownloadCurrent = layer.DownloadTotal
+				layer.ExtractCurrent = layer.ExtractTotal
+			case "Already exists":
+				layer.IsComplete = true
+			}
+
+			// 记录有进度条的最后一条
+			if progress.Progress != "" {
+				lastProgress = progress
+			}
+		} else if progress.Status != "" {
+			// 没有 ID 的状态消息（如 Digest, Status 等）
+			lastProgress = progress
+		}
+
+		// 限制更新频率
+		if time.Since(lastReportTime) < reportInterval {
+			continue
+		}
+		lastReportTime = time.Now()
+
+		// 计算总体进度
+		var totalProgress float64
+		completeCount := 0
+		activeCount := 0
+		var activeStatus string
+
+		for _, layer := range layers {
+			totalProgress += layer.getProgress()
+			if layer.IsComplete {
+				completeCount++
+			}
+			// 记录活跃状态（正在进行的操作）
+			if layer.Status == "Downloading" || layer.Status == "Extracting" ||
+				layer.Status == "Verifying Checksum" {
+				activeCount++
+				activeStatus = layer.Status
+			}
+		}
+
+		// 计算百分比
+		var layerPct int
+		if len(layers) > 0 {
+			layerPct = int(totalProgress * 100 / float64(len(layers)))
+		}
+
+		// 映射到指定范围
+		pct := startPct + layerPct*(endPct-startPct)/100
+
+		// 构建详细信息
+		var detailMsg string
+		if lastProgress.Progress != "" {
+			// 使用 Docker 原生进度条格式，显示当前操作的层
+			detailMsg = fmt.Sprintf("%s: %s", lastProgress.Status, lastProgress.Progress)
+		} else if activeStatus != "" {
+			// 显示活跃状态
+			detailMsg = fmt.Sprintf("%s (%d 层处理中, %d/%d 完成)",
+				translateStatus(activeStatus), activeCount, completeCount, len(layers))
+		} else if len(layers) > 0 {
+			detailMsg = fmt.Sprintf("处理中: %d/%d 层完成", completeCount, len(layers))
+		} else if lastProgress.Status != "" {
+			detailMsg = lastProgress.Status
+		}
+
+		// 根据当前主要操作设置消息
+		var msg string
+		switch activeStatus {
+		case "Downloading":
+			msg = "下载镜像"
+		case "Extracting":
+			msg = "解压镜像"
+		case "Verifying Checksum":
+			msg = "校验镜像"
+		default:
+			msg = "拉取镜像"
+		}
+
+		onProgress(pct, msg, detailMsg)
+	}
+
+	// 读取完毕，报告结束进度
+	onProgress(endPct, "拉取完成", "镜像拉取完成")
+}
+
+// translateStatus 翻译状态文本
+func translateStatus(status string) string {
+	switch status {
+	case "Downloading":
+		return "下载中"
+	case "Extracting":
+		return "解压中"
+	case "Verifying Checksum":
+		return "校验中"
+	case "Download complete":
+		return "下载完成"
+	case "Pull complete":
+		return "拉取完成"
+	case "Already exists":
+		return "已存在"
+	case "Waiting":
+		return "等待中"
+	case "Pulling fs layer":
+		return "准备中"
+	default:
+		return status
+	}
+}
+
+// formatBytes 格式化字节数
+func formatBytes(bytes int64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+	)
+	switch {
+	case bytes >= GB:
+		return fmt.Sprintf("%.2fGB", float64(bytes)/GB)
+	case bytes >= MB:
+		return fmt.Sprintf("%.2fMB", float64(bytes)/MB)
+	case bytes >= KB:
+		return fmt.Sprintf("%.2fKB", float64(bytes)/KB)
+	default:
+		return fmt.Sprintf("%dB", bytes)
+	}
+}
 
 // UpdateResult 更新结果
 type UpdateResult struct {
@@ -231,22 +493,8 @@ func (e *Executor) UpdateWithProgress(ctx context.Context, mc MatchedContainer, 
 	}
 	defer pullOut.Close()
 
-	// 读取拉取进度
-	buf := make([]byte, 1024)
-	for {
-		n, readErr := pullOut.Read(buf)
-		if n > 0 {
-			// 简单解析进度（拉取过程在30%-60%之间）
-			reportProgress(45, "拉取新镜像", "正在下载镜像层...")
-		}
-		if readErr == io.EOF {
-			break
-		}
-		if readErr != nil {
-			break
-		}
-	}
-	reportProgress(60, "拉取完成", "镜像拉取完成")
+	// 解析镜像拉取进度（拉取过程在30%-60%之间）
+	parsePullProgress(pullOut, 30, 60, onProgress)
 
 	// 获取新镜像信息
 	newInspect, _, err := e.dockerClient.ImageInspectWithRaw(ctx, imageName)
@@ -366,13 +614,9 @@ func (e *Executor) CheckImageUpdate(ctx context.Context, img MatchedImage) (bool
 
 // PullImageWithProgress 拉取镜像（带进度回调）
 func (e *Executor) PullImageWithProgress(ctx context.Context, img MatchedImage, onProgress ProgressCallback) error {
-	reportProgress := func(pct int, msg, detail string) {
-		if onProgress != nil {
-			onProgress(pct, msg, detail)
-		}
+	if onProgress != nil {
+		onProgress(10, "开始拉取", fmt.Sprintf("正在拉取镜像 %s", img.FullName))
 	}
-
-	reportProgress(10, "开始拉取", fmt.Sprintf("正在拉取镜像 %s", img.FullName))
 
 	pullOut, err := e.dockerClient.ImagePull(ctx, img.FullName, image.PullOptions{})
 	if err != nil {
@@ -380,20 +624,8 @@ func (e *Executor) PullImageWithProgress(ctx context.Context, img MatchedImage, 
 	}
 	defer pullOut.Close()
 
-	// 读取拉取进度
-	buf := make([]byte, 1024)
-	for {
-		n, readErr := pullOut.Read(buf)
-		if n > 0 {
-			reportProgress(50, "拉取中", "正在下载镜像层...")
-		}
-		if readErr == io.EOF {
-			break
-		}
-		if readErr != nil {
-			break
-		}
-	}
+	// 解析镜像拉取进度（拉取过程在10%-90%之间）
+	parsePullProgress(pullOut, 10, 90, onProgress)
 
 	// 获取新镜像ID并更新缓存
 	newInspect, _, err := e.dockerClient.ImageInspectWithRaw(ctx, img.FullName)
@@ -402,7 +634,9 @@ func (e *Executor) PullImageWithProgress(ctx context.Context, img MatchedImage, 
 		logx.Infof("已更新镜像缓存: %s (ID: %s)", img.FullName, newInspect.ID[:12])
 	}
 
-	reportProgress(100, "拉取完成", "镜像更新成功")
+	if onProgress != nil {
+		onProgress(100, "拉取完成", "镜像更新成功")
+	}
 	logx.Infof("镜像[%s]拉取完成", img.FullName)
 	return nil
 }
