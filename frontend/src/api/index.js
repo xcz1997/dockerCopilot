@@ -106,7 +106,18 @@ const api = {
     saveBark: (data) => instance.post('/settings/bark', data, { headers: { 'Content-Type': 'application/json' } }),
     testBark: (data) => instance.post('/settings/bark/test', data, { headers: { 'Content-Type': 'application/json' } }),
     getContainerEvents: () => instance.get('/settings/container-events'),
-    saveContainerEvents: (data) => instance.post('/settings/container-events', data, { headers: { 'Content-Type': 'application/json' } })
+    saveContainerEvents: (data) => instance.post('/settings/container-events', data, { headers: { 'Content-Type': 'application/json' } }),
+    // Registry 镜像配置
+    getRegistry: () => instance.get('/settings/registry'),
+    saveRegistry: (data) => instance.post('/settings/registry', data, { headers: { 'Content-Type': 'application/json' } }),
+    testRegistry: (address) => instance.post('/settings/registry/test', { address }, { headers: { 'Content-Type': 'application/json' } }),
+    // 代理配置
+    getProxy: () => instance.get('/settings/proxy'),
+    saveProxy: (data) => instance.post('/settings/proxy', data, { headers: { 'Content-Type': 'application/json' } }),
+    testProxy: (data) => instance.post('/settings/proxy/test', data, { headers: { 'Content-Type': 'application/json' } }),
+    // 性能配置
+    getPerformance: () => instance.get('/settings/performance'),
+    savePerformance: (data) => instance.post('/settings/performance', data, { headers: { 'Content-Type': 'application/json' } })
   },
 
   tasks: {

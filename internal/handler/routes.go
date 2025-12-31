@@ -292,6 +292,49 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/settings/container-events",
 				Handler: settings.ContainerEventSaveHandler(serverCtx),
 			},
+			// Registry 镜像配置
+			{
+				Method:  http.MethodGet,
+				Path:    "/settings/registry",
+				Handler: settings.RegistryGetHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/settings/registry",
+				Handler: settings.RegistrySaveHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/settings/registry/test",
+				Handler: settings.RegistryTestHandler(serverCtx),
+			},
+			// 代理配置
+			{
+				Method:  http.MethodGet,
+				Path:    "/settings/proxy",
+				Handler: settings.ProxyGetHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/settings/proxy",
+				Handler: settings.ProxySaveHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/settings/proxy/test",
+				Handler: settings.ProxyTestHandler(serverCtx),
+			},
+			// 性能配置
+			{
+				Method:  http.MethodGet,
+				Path:    "/settings/performance",
+				Handler: settings.PerformanceGetHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/settings/performance",
+				Handler: settings.PerformanceSaveHandler(serverCtx),
+			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),

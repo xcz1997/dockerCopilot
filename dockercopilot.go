@@ -63,8 +63,8 @@ func main() {
 	defer server.Stop()
 	ctx := svc.NewServiceContext(c)
 
-	// 应用性能配置
-	perfConfig := c.Performance
+	// 应用性能配置（从数据库加载，环境变量优先级最高）
+	perfConfig := ctx.PerformanceConfig
 	maxConcurrent := perfConfig.GetEffectiveMaxConcurrent()
 	checkInterval := perfConfig.GetEffectiveCheckInterval()
 

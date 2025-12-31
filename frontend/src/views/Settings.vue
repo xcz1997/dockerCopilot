@@ -46,6 +46,73 @@ const containerEventConfig = ref({
 const containerEventLoading = ref(false)
 const containerEventSaving = ref(false)
 
+// Registry 镜像配置
+const registryConfig = ref({
+  enabled: false,
+  mirrors: []
+})
+const registryEnvOverride = ref({
+  enabled: { hasOverride: false, message: '' },
+  mirrors: { hasOverride: false, message: '' }
+})
+const registryLoading = ref(false)
+const registrySaving = ref(false)
+const registryTesting = ref({}) // 用于追踪每个地址的测试状态
+
+// 代理配置
+const proxyConfig = ref({
+  enabled: false,
+  type: 'http',
+  host: '',
+  port: 7890,
+  username: '',
+  password: ''
+})
+const proxyEnvOverride = ref({
+  enabled: { hasOverride: false, message: '' },
+  type: { hasOverride: false, message: '' },
+  host: { hasOverride: false, message: '' },
+  port: { hasOverride: false, message: '' },
+  username: { hasOverride: false, message: '' },
+  password: { hasOverride: false, message: '' }
+})
+const proxyLoading = ref(false)
+const proxySaving = ref(false)
+const proxyTesting = ref(false)
+
+const proxyTypeOptions = [
+  { value: 'http', label: 'HTTP' },
+  { value: 'https', label: 'HTTPS' },
+  { value: 'socks5', label: 'SOCKS5' }
+]
+
+// 性能配置
+const performanceConfig = ref({
+  lowPowerMode: false,
+  maxConcurrentChecks: 10,
+  checkIntervalMinutes: 30,
+  disableAutoCheck: false
+})
+const performanceEnvOverride = ref({
+  lowPowerMode: { hasOverride: false, message: '' },
+  maxConcurrentChecks: { hasOverride: false, message: '' },
+  checkIntervalMinutes: { hasOverride: false, message: '' },
+  disableAutoCheck: { hasOverride: false, message: '' }
+})
+const performanceLoading = ref(false)
+const performanceSaving = ref(false)
+
+// 计算属性：检查是否有任何环境变量覆盖
+const hasRegistryEnvOverride = () => {
+  return registryEnvOverride.value.enabled.hasOverride || registryEnvOverride.value.mirrors.hasOverride
+}
+const hasProxyEnvOverride = () => {
+  return Object.values(proxyEnvOverride.value).some(v => v.hasOverride)
+}
+const hasPerformanceEnvOverride = () => {
+  return Object.values(performanceEnvOverride.value).some(v => v.hasOverride)
+}
+
 async function fetchVersion() {
   loading.value = true
   try {
@@ -174,6 +241,186 @@ async function saveContainerEventConfig() {
   }
 }
 
+// Registry 配置方法
+async function fetchRegistryConfig() {
+  registryLoading.value = true
+  try {
+    const response = await api.settings.getRegistry()
+    if (response.code === 200) {
+      registryConfig.value = {
+        enabled: response.data.enabled || false,
+        mirrors: response.data.mirrors || []
+      }
+      // 获取环境变量覆盖状态
+      if (response.data.envOverride) {
+        registryEnvOverride.value = response.data.envOverride
+      }
+    }
+  } catch (e) {
+    console.error('获取 Registry 配置失败:', e)
+  } finally {
+    registryLoading.value = false
+  }
+}
+
+async function saveRegistryConfig() {
+  registrySaving.value = true
+  try {
+    // 过滤空地址
+    const mirrors = registryConfig.value.mirrors.filter(m => m.trim() !== '')
+    const response = await api.settings.saveRegistry({
+      enabled: registryConfig.value.enabled,
+      mirrors: mirrors
+    })
+    if (response.code === 200) {
+      toastStore.success('保存成功')
+      registryConfig.value.mirrors = mirrors
+    } else {
+      toastStore.error(response.msg || '保存失败')
+    }
+  } catch (e) {
+    toastStore.error('保存失败: ' + e.message)
+  } finally {
+    registrySaving.value = false
+  }
+}
+
+async function testRegistryMirror(address, index) {
+  if (!address.trim()) {
+    toastStore.warning('地址不能为空')
+    return
+  }
+  registryTesting.value[index] = true
+  try {
+    const response = await api.settings.testRegistry(address)
+    if (response.code === 200) {
+      toastStore.success(`${address} 连接成功`)
+    } else {
+      toastStore.error(response.msg || '连接失败')
+    }
+  } catch (e) {
+    toastStore.error('测试失败: ' + e.message)
+  } finally {
+    registryTesting.value[index] = false
+  }
+}
+
+function addRegistryMirror() {
+  registryConfig.value.mirrors.push('')
+}
+
+function removeRegistryMirror(index) {
+  registryConfig.value.mirrors.splice(index, 1)
+}
+
+// 代理配置方法
+async function fetchProxyConfig() {
+  proxyLoading.value = true
+  try {
+    const response = await api.settings.getProxy()
+    if (response.code === 200) {
+      proxyConfig.value = {
+        enabled: response.data.enabled || false,
+        type: response.data.type || 'http',
+        host: response.data.host || '',
+        port: response.data.port || 7890,
+        username: response.data.username || '',
+        password: response.data.password || ''
+      }
+      // 获取环境变量覆盖状态
+      if (response.data.envOverride) {
+        proxyEnvOverride.value = response.data.envOverride
+      }
+    }
+  } catch (e) {
+    console.error('获取代理配置失败:', e)
+  } finally {
+    proxyLoading.value = false
+  }
+}
+
+async function saveProxyConfig() {
+  proxySaving.value = true
+  try {
+    const response = await api.settings.saveProxy(proxyConfig.value)
+    if (response.code === 200) {
+      toastStore.success('保存成功')
+    } else {
+      toastStore.error(response.msg || '保存失败')
+    }
+  } catch (e) {
+    toastStore.error('保存失败: ' + e.message)
+  } finally {
+    proxySaving.value = false
+  }
+}
+
+async function testProxy() {
+  if (!proxyConfig.value.host || !proxyConfig.value.port) {
+    toastStore.warning('请先填写代理服务器地址和端口')
+    return
+  }
+  proxyTesting.value = true
+  try {
+    const response = await api.settings.testProxy({
+      type: proxyConfig.value.type,
+      host: proxyConfig.value.host,
+      port: proxyConfig.value.port,
+      username: proxyConfig.value.username,
+      password: proxyConfig.value.password
+    })
+    if (response.code === 200) {
+      toastStore.success('代理连接成功')
+    } else {
+      toastStore.error(response.msg || '连接失败')
+    }
+  } catch (e) {
+    toastStore.error('测试失败: ' + e.message)
+  } finally {
+    proxyTesting.value = false
+  }
+}
+
+// 性能配置方法
+async function fetchPerformanceConfig() {
+  performanceLoading.value = true
+  try {
+    const response = await api.settings.getPerformance()
+    if (response.code === 200) {
+      performanceConfig.value = {
+        lowPowerMode: response.data.lowPowerMode || false,
+        maxConcurrentChecks: response.data.maxConcurrentChecks || 10,
+        checkIntervalMinutes: response.data.checkIntervalMinutes || 30,
+        disableAutoCheck: response.data.disableAutoCheck || false
+      }
+      // 获取环境变量覆盖状态
+      if (response.data.envOverride) {
+        performanceEnvOverride.value = response.data.envOverride
+      }
+    }
+  } catch (e) {
+    console.error('获取性能配置失败:', e)
+  } finally {
+    performanceLoading.value = false
+  }
+}
+
+async function savePerformanceConfig() {
+  performanceSaving.value = true
+  try {
+    const response = await api.settings.savePerformance(performanceConfig.value)
+    if (response.code === 200) {
+      toastStore.success('保存成功，部分配置需重启后生效')
+    } else {
+      toastStore.error(response.msg || '保存失败')
+    }
+  } catch (e) {
+    toastStore.error('保存失败: ' + e.message)
+  } finally {
+    performanceSaving.value = false
+  }
+}
+
 async function handleUpdate() {
   // Docker 环境检查
   if (version.value?.isDocker) {
@@ -218,6 +465,9 @@ onMounted(() => {
   fetchVersion()
   fetchBarkConfig()
   fetchContainerEventConfig()
+  fetchRegistryConfig()
+  fetchProxyConfig()
+  fetchPerformanceConfig()
 })
 </script>
 
@@ -606,6 +856,454 @@ onMounted(() => {
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
             {{ containerEventSaving ? '保存中...' : '保存配置' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Registry 镜像配置 -->
+    <div class="card p-6">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+          </svg>
+          Registry 镜像地址
+        </div>
+      </h3>
+      <p class="text-gray-500 dark:text-gray-400 mb-4">
+        配置 Docker Registry 镜像加速地址，用于加速镜像拉取和更新检查。
+      </p>
+
+      <!-- 环境变量覆盖提示 -->
+      <div v-if="hasRegistryEnvOverride()" class="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+        <div class="flex items-start gap-2">
+          <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div class="text-sm text-amber-700 dark:text-amber-300">
+            <p class="font-medium">此配置已通过环境变量设置，无法在界面修改</p>
+            <p class="mt-1 text-amber-600 dark:text-amber-400">如需修改，请更新 Docker 环境变量后重启容器。</p>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="registryLoading" class="flex items-center gap-2 text-gray-500 py-4">
+        <svg class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+        加载配置...
+      </div>
+
+      <div v-else class="space-y-4">
+        <!-- 启用开关 -->
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="font-medium text-gray-900 dark:text-white">启用自定义镜像</label>
+            <p class="text-sm text-gray-500 dark:text-gray-400">开启后优先使用自定义镜像地址</p>
+          </div>
+          <button
+            @click="registryConfig.enabled = !registryConfig.enabled"
+            :disabled="hasRegistryEnvOverride()"
+            :class="[
+              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+              registryConfig.enabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600',
+              hasRegistryEnvOverride() ? 'opacity-50 cursor-not-allowed' : ''
+            ]"
+          >
+            <span
+              :class="[
+                'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                registryConfig.enabled ? 'translate-x-6' : 'translate-x-1'
+              ]"
+            />
+          </button>
+        </div>
+
+        <!-- 镜像地址列表 -->
+        <div v-if="registryConfig.enabled" class="space-y-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+          <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+            镜像地址列表（按优先级排序，从上到下）
+          </p>
+
+          <div v-for="(mirror, index) in registryConfig.mirrors" :key="index" class="flex items-center gap-2">
+            <input
+              v-model="registryConfig.mirrors[index]"
+              type="text"
+              class="input flex-1"
+              :class="{ 'opacity-50 cursor-not-allowed': hasRegistryEnvOverride() }"
+              :disabled="hasRegistryEnvOverride()"
+              placeholder="例如：docker.m.daocloud.io"
+            />
+            <button
+              @click="testRegistryMirror(mirror, index)"
+              :disabled="registryTesting[index]"
+              class="btn btn-secondary btn-sm whitespace-nowrap"
+            >
+              <svg v-if="registryTesting[index]" class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              {{ registryTesting[index] ? '测试中' : '测试' }}
+            </button>
+            <button
+              v-if="!hasRegistryEnvOverride()"
+              @click="removeRegistryMirror(index)"
+              class="btn btn-ghost btn-sm text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+
+          <button
+            v-if="!hasRegistryEnvOverride()"
+            @click="addRegistryMirror"
+            class="btn btn-secondary btn-sm"
+          >
+            <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            添加镜像地址
+          </button>
+
+          <p class="text-xs text-gray-500 dark:text-gray-400">
+            常用镜像地址：docker.m.daocloud.io、docker.1ms.run、hub.rat.dev
+          </p>
+        </div>
+
+        <!-- 保存按钮 -->
+        <div v-if="!hasRegistryEnvOverride()" class="flex gap-3 pt-2">
+          <button
+            @click="saveRegistryConfig"
+            :disabled="registrySaving"
+            class="btn btn-primary"
+          >
+            <svg v-if="registrySaving" class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            {{ registrySaving ? '保存中...' : '保存配置' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 网络代理配置 -->
+    <div class="card p-6">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+          </svg>
+          网络代理
+        </div>
+      </h3>
+      <p class="text-gray-500 dark:text-gray-400 mb-4">
+        配置 HTTP/HTTPS/SOCKS5 代理，应用于 Registry 连接、镜像检查等外部网络请求。
+      </p>
+
+      <!-- 环境变量覆盖提示 -->
+      <div v-if="hasProxyEnvOverride()" class="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+        <div class="flex items-start gap-2">
+          <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div class="text-sm text-amber-700 dark:text-amber-300">
+            <p class="font-medium">此配置已通过环境变量设置，无法在界面修改</p>
+            <p class="mt-1 text-amber-600 dark:text-amber-400">如需修改，请更新 Docker 环境变量后重启容器。</p>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="proxyLoading" class="flex items-center gap-2 text-gray-500 py-4">
+        <svg class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+        加载配置...
+      </div>
+
+      <div v-else class="space-y-4">
+        <!-- 启用开关 -->
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="font-medium text-gray-900 dark:text-white">启用代理</label>
+            <p class="text-sm text-gray-500 dark:text-gray-400">开启后所有外部请求将通过代理</p>
+          </div>
+          <button
+            @click="proxyConfig.enabled = !proxyConfig.enabled"
+            :disabled="hasProxyEnvOverride()"
+            :class="[
+              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+              proxyConfig.enabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600',
+              hasProxyEnvOverride() ? 'opacity-50 cursor-not-allowed' : ''
+            ]"
+          >
+            <span
+              :class="[
+                'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                proxyConfig.enabled ? 'translate-x-6' : 'translate-x-1'
+              ]"
+            />
+          </button>
+        </div>
+
+        <div v-if="proxyConfig.enabled" class="space-y-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+          <!-- 代理类型 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              代理类型
+            </label>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="option in proxyTypeOptions"
+                :key="option.value"
+                @click="proxyConfig.type = option.value"
+                :disabled="hasProxyEnvOverride()"
+                :class="[
+                  'px-3 py-1.5 rounded-lg text-sm font-medium transition-all border',
+                  proxyConfig.type === option.value
+                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                    : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300',
+                  hasProxyEnvOverride() ? 'opacity-50 cursor-not-allowed' : ''
+                ]"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 服务器地址和端口 -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                服务器地址
+              </label>
+              <input
+                v-model="proxyConfig.host"
+                type="text"
+                class="input"
+                :class="{ 'opacity-50 cursor-not-allowed': hasProxyEnvOverride() }"
+                :disabled="hasProxyEnvOverride()"
+                placeholder="例如：127.0.0.1"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                端口
+              </label>
+              <input
+                v-model.number="proxyConfig.port"
+                type="number"
+                class="input"
+                :class="{ 'opacity-50 cursor-not-allowed': hasProxyEnvOverride() }"
+                :disabled="hasProxyEnvOverride()"
+                placeholder="例如：7890"
+              />
+            </div>
+          </div>
+
+          <!-- 认证信息 -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                用户名（可选）
+              </label>
+              <input
+                v-model="proxyConfig.username"
+                type="text"
+                class="input"
+                :class="{ 'opacity-50 cursor-not-allowed': hasProxyEnvOverride() }"
+                :disabled="hasProxyEnvOverride()"
+                placeholder="代理认证用户名"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                密码（可选）
+              </label>
+              <input
+                v-model="proxyConfig.password"
+                type="password"
+                class="input"
+                :class="{ 'opacity-50 cursor-not-allowed': hasProxyEnvOverride() }"
+                :disabled="hasProxyEnvOverride()"
+                placeholder="代理认证密码"
+              />
+            </div>
+          </div>
+
+          <p class="text-xs text-gray-500 dark:text-gray-400">
+            代理连接失败时将自动回退到直连，不会影响正常使用。
+          </p>
+        </div>
+
+        <!-- 按钮组 -->
+        <div class="flex gap-3 pt-2">
+          <button
+            v-if="!hasProxyEnvOverride()"
+            @click="saveProxyConfig"
+            :disabled="proxySaving"
+            class="btn btn-primary"
+          >
+            <svg v-if="proxySaving" class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            {{ proxySaving ? '保存中...' : '保存配置' }}
+          </button>
+          <button
+            @click="testProxy"
+            :disabled="proxyTesting"
+            class="btn btn-secondary"
+          >
+            <svg v-if="proxyTesting" class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            {{ proxyTesting ? '测试中...' : '测试连接' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 性能配置 -->
+    <div class="card p-6">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          性能配置
+        </div>
+      </h3>
+      <p class="text-gray-500 dark:text-gray-400 mb-4">
+        针对低性能设备（NAS、树莓派等）优化资源占用，控制镜像检查的并发数和频率。
+      </p>
+
+      <!-- 环境变量覆盖提示 -->
+      <div v-if="hasPerformanceEnvOverride()" class="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+        <div class="flex items-start gap-2">
+          <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div class="text-sm text-amber-700 dark:text-amber-300">
+            <p class="font-medium">此配置已通过环境变量设置，无法在界面修改</p>
+            <p class="mt-1 text-amber-600 dark:text-amber-400">如需修改，请更新 Docker 环境变量后重启容器。</p>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="performanceLoading" class="flex items-center gap-2 text-gray-500 py-4">
+        <svg class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+        加载配置...
+      </div>
+
+      <div v-else class="space-y-4">
+        <!-- 低性能模式 -->
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="font-medium text-gray-900 dark:text-white">低性能模式</label>
+            <p class="text-sm text-gray-500 dark:text-gray-400">启用后所有并发操作改为顺序执行，适用于低配设备</p>
+          </div>
+          <button
+            @click="performanceConfig.lowPowerMode = !performanceConfig.lowPowerMode"
+            :disabled="hasPerformanceEnvOverride()"
+            :class="[
+              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+              performanceConfig.lowPowerMode ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600',
+              hasPerformanceEnvOverride() ? 'opacity-50 cursor-not-allowed' : ''
+            ]"
+          >
+            <span
+              :class="[
+                'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                performanceConfig.lowPowerMode ? 'translate-x-6' : 'translate-x-1'
+              ]"
+            />
+          </button>
+        </div>
+
+        <!-- 禁用启动时自动检查 -->
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="font-medium text-gray-900 dark:text-white">禁用启动时自动检查</label>
+            <p class="text-sm text-gray-500 dark:text-gray-400">启用后程序启动时不会自动检查镜像更新</p>
+          </div>
+          <button
+            @click="performanceConfig.disableAutoCheck = !performanceConfig.disableAutoCheck"
+            :disabled="hasPerformanceEnvOverride()"
+            :class="[
+              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+              performanceConfig.disableAutoCheck ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600',
+              hasPerformanceEnvOverride() ? 'opacity-50 cursor-not-allowed' : ''
+            ]"
+          >
+            <span
+              :class="[
+                'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                performanceConfig.disableAutoCheck ? 'translate-x-6' : 'translate-x-1'
+              ]"
+            />
+          </button>
+        </div>
+
+        <!-- 最大并发数 -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            镜像检查最大并发数
+          </label>
+          <input
+            v-model.number="performanceConfig.maxConcurrentChecks"
+            type="number"
+            min="1"
+            max="20"
+            class="input w-32"
+            :class="{ 'opacity-50 cursor-not-allowed': hasPerformanceEnvOverride() }"
+            :disabled="hasPerformanceEnvOverride()"
+          />
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            范围 1-20，低性能模式下自动设为 1
+          </p>
+        </div>
+
+        <!-- 自动检查间隔 -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            镜像自动检查间隔（分钟）
+          </label>
+          <input
+            v-model.number="performanceConfig.checkIntervalMinutes"
+            type="number"
+            min="0"
+            max="1440"
+            class="input w-32"
+            :class="{ 'opacity-50 cursor-not-allowed': hasPerformanceEnvOverride() }"
+            :disabled="hasPerformanceEnvOverride()"
+          />
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            设为 0 禁用自动检查，最大 1440（24小时）
+          </p>
+        </div>
+
+        <!-- 保存按钮 -->
+        <div v-if="!hasPerformanceEnvOverride()" class="flex gap-3 pt-2">
+          <button
+            @click="savePerformanceConfig"
+            :disabled="performanceSaving"
+            class="btn btn-primary"
+          >
+            <svg v-if="performanceSaving" class="animate-spin w-4 h-4" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            {{ performanceSaving ? '保存中...' : '保存配置' }}
           </button>
         </div>
       </div>

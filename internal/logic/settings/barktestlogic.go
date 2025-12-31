@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/xcz1997/dockerCopilot/internal/module"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 	"github.com/xcz1997/dockerCopilot/internal/types"
 
@@ -67,7 +68,8 @@ func sendBarkNotification(server, key, title, body string) error {
 		url.QueryEscape(dockerIconURL),
 	)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	// 使用统一的 HTTP 客户端（支持代理）
+	client := module.GetHTTPClient(10 * time.Second)
 	resp, err := client.Get(barkURL)
 	if err != nil {
 		return fmt.Errorf("请求失败: %w", err)

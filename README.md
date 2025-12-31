@@ -85,16 +85,60 @@ docker run -d \
 | `DelOldContainer` | ❌ | `true` | 更新容器后是否删除旧容器，设为 `false` 保留 |
 | `githubProxy` | ❌ | - | GitHub 代理地址，用于检查程序更新 |
 
+### Registry 镜像加速配置
+
+支持自定义 Docker Registry 镜像地址，解决国内访问 Docker Hub 慢的问题：
+
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| `REGISTRY_MIRRORS_ENABLED` | `false` | 是否启用自定义镜像地址 |
+| `REGISTRY_MIRRORS` | - | 镜像地址列表，逗号分隔（如 `docker.m.daocloud.io,docker.1ms.run`） |
+
+**镜像加速示例：**
+
+```yaml
+environment:
+  - REGISTRY_MIRRORS_ENABLED=true
+  - REGISTRY_MIRRORS=docker.m.daocloud.io,docker.1ms.run
+```
+
+> 优先级：用户配置 > 官方 Docker Hub > 内置加速器列表
+
+### 网络代理配置
+
+支持 HTTP/HTTPS/SOCKS5 代理，应用于所有 HTTP 请求：
+
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| `PROXY_ENABLED` | `false` | 是否启用代理 |
+| `PROXY_TYPE` | `http` | 代理类型：`http`、`https`、`socks5` |
+| `PROXY_HOST` | - | 代理服务器地址 |
+| `PROXY_PORT` | - | 代理端口 |
+| `PROXY_USER` | - | 代理用户名（可选） |
+| `PROXY_PASS` | - | 代理密码（可选） |
+
+**代理配置示例：**
+
+```yaml
+environment:
+  - PROXY_ENABLED=true
+  - PROXY_TYPE=http
+  - PROXY_HOST=192.168.1.1
+  - PROXY_PORT=7890
+```
+
+> 代理连接失败时会自动回退到直连。
+
 ### 性能配置
 
 适用于 NAS、树莓派等低性能设备优化：
 
 | 变量名 | 默认值 | 说明 |
 |--------|--------|------|
-| `PERFORMANCE_LOWPOWERMODE` | `false` | 低性能模式，启用后所有并发操作改为顺序执行 |
-| `PERFORMANCE_MAXCONCURRENTCHECKS` | `10` | 镜像检查最大并发数（范围 1-20，低性能模式自动设为 1） |
-| `PERFORMANCE_CHECKINTERVALMINUTES` | `30` | 镜像自动检查间隔（分钟），设为 `0` 禁用自动检查 |
-| `PERFORMANCE_DISABLEAUTOCHECK` | `false` | 禁用启动时自动检查镜像更新 |
+| `LOW_POWER_MODE` | `false` | 低性能模式，启用后所有并发操作改为顺序执行 |
+| `MAX_CONCURRENT_CHECKS` | `10` | 镜像检查最大并发数（范围 1-20，低性能模式自动设为 1） |
+| `CHECK_INTERVAL_MINUTES` | `30` | 镜像自动检查间隔（分钟），设为 `0` 禁用自动检查 |
+| `DISABLE_AUTO_CHECK` | `false` | 禁用启动时自动检查镜像更新 |
 
 **低性能模式示例：**
 
@@ -113,10 +157,20 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - secretKey=your_secret_key_here
-      - PERFORMANCE_LOWPOWERMODE=true
-      - PERFORMANCE_MAXCONCURRENTCHECKS=1
-      - PERFORMANCE_CHECKINTERVALMINUTES=60
+      - LOW_POWER_MODE=true
+      - MAX_CONCURRENT_CHECKS=1
+      - CHECK_INTERVAL_MINUTES=60
 ```
+
+### 配置优先级
+
+所有配置支持三种方式设置，优先级从高到低：
+
+1. **环境变量**（最高优先级）
+2. **Web 界面设置**（保存到数据库）
+3. **默认值**
+
+环境变量设置会覆盖数据库中的配置，适合 Docker 部署时固定配置。
 
 ## 高级配置
 

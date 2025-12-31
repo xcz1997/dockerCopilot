@@ -46,7 +46,8 @@ func sendBark(server, key, title, body string) error {
 		url.QueryEscape(dockerIconURL),
 	)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	// 使用统一的 HTTP 客户端（支持代理）
+	client := GetHTTPClient(10 * time.Second)
 	resp, err := client.Get(barkURL)
 	if err != nil {
 		logx.Errorf("Bark 推送请求失败: %v", err)

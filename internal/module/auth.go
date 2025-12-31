@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	ref "github.com/distribution/reference"
-	"github.com/xcz1997/dockerCopilot/internal/types"
-	"github.com/zeromicro/go-zero/core/logx"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	ref "github.com/distribution/reference"
+	"github.com/xcz1997/dockerCopilot/internal/model"
+	"github.com/xcz1997/dockerCopilot/internal/types"
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 const ChallengeHeader = "WWW-Authenticate"
@@ -38,7 +40,8 @@ func GetToken(image types.Image, registryAuth string) (string, error) {
 		return "", err
 	}
 
-	client := &http.Client{}
+	// 使用统一的 HTTP 客户端（支持代理）
+	client := GetHTTPClient(30 * time.Second)
 	var res *http.Response
 	if res, err = client.Do(req); err != nil {
 		return "", err
@@ -77,7 +80,8 @@ func GetChallengeRequest(URL url.URL) (*http.Request, error) {
 }
 
 func GetBearerHeader(challenge string, imageRef ref.Named, registryAuth string) (string, error) {
-	client := http.Client{}
+	// 使用统一的 HTTP 客户端（支持代理）
+	client := GetHTTPClient(30 * time.Second)
 	authURL, err := GetAuthURL(challenge, imageRef)
 
 	if err != nil {
@@ -100,6 +104,7 @@ func GetBearerHeader(challenge string, imageRef ref.Named, registryAuth string) 
 	if authResponse, err = client.Do(r); err != nil {
 		return "", err
 	}
+	defer authResponse.Body.Close()
 
 	body, _ := io.ReadAll(authResponse.Body)
 	tokenResponse := &types.TokenResponse{}
@@ -163,9 +168,24 @@ func GetRegistryAddress(imageRef string) (string, error) {
 	address := ref.Domain(normalizedRef)
 
 	if address == DefaultRegistryDomain {
+		// 优先级：用户配置 > 官方 Docker Hub > 内置加速器列表
+
+		// 1. 首先尝试用户配置的镜像地址
+		mirrors, err := model.GetRegistryMirrorsConfig()
+		if err == nil && mirrors.Enabled && len(mirrors.Mirrors) > 0 {
+			for _, mirror := range mirrors.Mirrors {
+				if checkHost(mirror) {
+					logx.Infof("使用自定义镜像地址: %s", mirror)
+					return mirror, nil
+				}
+			}
+		}
+
+		// 2. 然后尝试官方 Docker Hub
 		if checkHost(DefaultRegistryHost) {
 			address = DefaultRegistryHost
 		} else {
+			// 3. 最后回退到内置加速器列表
 			for _, host := range DefaultAcceleratorHostList {
 				if checkHost(host) {
 					address = host
@@ -182,11 +202,9 @@ func GetRegistryAddress(imageRef string) (string, error) {
 
 func checkHost(host string) bool {
 	URL := "https://" + host + "/v2/"
-	// 创建带有超时设置的 http.Client
-	client := http.Client{
-		Timeout: 5 * time.Second,
-	}
-	// 发送 HEAD 请求
+	// 使用统一的 HTTP 客户端（支持代理）
+	client := GetHTTPClient(5 * time.Second)
+	// 发送 GET 请求
 	resp, err := client.Get(URL)
 	if err != nil {
 		logx.Errorf("Failed to connect to %s: %s", URL, err)

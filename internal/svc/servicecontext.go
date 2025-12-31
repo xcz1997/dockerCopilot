@@ -63,6 +63,7 @@ type ServiceContext struct {
 	DB                         *sql.DB
 	GroupScheduler             *scheduler.GroupScheduler
 	EventWatcher               *module.ContainerEventWatcher
+	PerformanceConfig          *model.PerformanceConfig // 性能配置（从数据库加载）
 	mu                         sync.Mutex
 }
 
@@ -111,6 +112,19 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		logx.Errorf("Unable to initialize database: %s", err)
 	}
 
+	// 从数据库加载性能配置（环境变量会在 GetPerformanceConfig 中自动覆盖）
+	perfConfig, err := model.GetPerformanceConfig()
+	if err != nil {
+		logx.Errorf("加载性能配置失败: %s", err)
+		// 使用默认配置
+		perfConfig = &model.PerformanceConfig{
+			LowPowerMode:         false,
+			MaxConcurrentChecks:  10,
+			CheckIntervalMinutes: 30,
+			DisableAutoCheck:     false,
+		}
+	}
+
 	// 创建镜像更新检查器
 	hubImageInfo := module.NewImageCheck()
 
@@ -121,14 +135,22 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	eventWatcher := module.NewContainerEventWatcher(cli)
 
 	return &ServiceContext{
-		Config:         c,
-		HubImageInfo:   hubImageInfo,
-		ProgressStore:  make(ProgressStoreType),
-		DockerClient:   cli,
-		DB:             db,
-		GroupScheduler: groupScheduler,
-		EventWatcher:   eventWatcher,
+		Config:            c,
+		HubImageInfo:      hubImageInfo,
+		ProgressStore:     make(ProgressStoreType),
+		DockerClient:      cli,
+		DB:                db,
+		GroupScheduler:    groupScheduler,
+		EventWatcher:      eventWatcher,
+		PerformanceConfig: perfConfig,
 	}
+}
+
+// UpdatePerformanceConfig 更新性能配置缓存
+func (ctx *ServiceContext) UpdatePerformanceConfig(config *model.PerformanceConfig) {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+	ctx.PerformanceConfig = config
 }
 
 func (ctx *ServiceContext) UpdateProgress(taskID string, progress TaskProgress) {

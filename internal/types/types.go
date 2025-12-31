@@ -186,3 +186,42 @@ type ContainerEventConfigReq struct {
 	NotifyOnHealthy   bool `json:"notifyOnHealthy"`   // 容器健康检查通过时通知
 	NotifyOnUnhealthy bool `json:"notifyOnUnhealthy"` // 容器健康检查失败时通知
 }
+
+// ======== Registry 镜像配置类型 ========
+
+type RegistryMirrorsConfigReq struct {
+	Enabled bool     `json:"enabled"` // 是否启用自定义镜像
+	Mirrors []string `json:"mirrors"` // 镜像地址列表
+}
+
+type RegistryTestReq struct {
+	Address string `json:"address"` // 要测试的 Registry 地址
+}
+
+// ======== 代理配置类型 ========
+
+type ProxyConfigReq struct {
+	Enabled  bool   `json:"enabled"`            // 是否启用代理
+	Type     string `json:"type"`               // http, https, socks5
+	Host     string `json:"host"`               // 代理服务器地址
+	Port     int    `json:"port"`               // 代理端口
+	Username string `json:"username,optional"`  // 代理用户名（可选）
+	Password string `json:"password,optional"`  // 代理密码（可选）
+}
+
+type ProxyTestReq struct {
+	Type     string `json:"type"`               // http, https, socks5
+	Host     string `json:"host"`               // 代理服务器地址
+	Port     int    `json:"port"`               // 代理端口
+	Username string `json:"username,optional"`  // 代理用户名（可选）
+	Password string `json:"password,optional"`  // 代理密码（可选）
+}
+
+// ======== 性能配置类型 ========
+
+type PerformanceConfigReq struct {
+	LowPowerMode         bool `json:"lowPowerMode"`         // 低性能模式
+	MaxConcurrentChecks  int  `json:"maxConcurrentChecks"`  // 镜像检查最大并发数
+	CheckIntervalMinutes int  `json:"checkIntervalMinutes"` // 镜像自动检查间隔（分钟）
+	DisableAutoCheck     bool `json:"disableAutoCheck"`     // 禁用启动时自动检查
+}

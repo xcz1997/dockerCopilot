@@ -1,11 +1,9 @@
 package module
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	url2 "net/url"
 	"strings"
@@ -236,20 +234,8 @@ func BuildManifestURL(image types.Image) (string, error) {
 }
 
 func GetDigest(url string, token string) (string, error) {
-	tr := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
+	// 使用统一的 HTTP 客户端（支持代理配置）
+	client := GetHTTPClient(30 * time.Second)
 
 	req, _ := http.NewRequest("HEAD", url, nil)
 
