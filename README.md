@@ -26,6 +26,7 @@
 - 镜像来源标记（远程/本地，自动识别私有镜像）
 - 私有 Registry 认证（支持多个私有库，密码加密存储）
 - **多环境管理**（连接远程 DockerCopilot 实例，统一管理多个 Docker 环境）
+- **重启服务**（在 Web 界面一键重启 DockerCopilot 服务）
 
 ## 快速开始
 
@@ -291,6 +292,24 @@ DockerCopilot 支持连接多个远程 DockerCopilot 实例，实现统一管理
 - **刷新状态**：点击「刷新」更新环境的统计信息
 
 > 切换到远程环境后，容器列表、镜像列表等页面将显示远程环境的数据，所有操作也将在远程环境执行。
+
+### 重启服务
+
+在「环境管理」页面，本地环境（Local）提供「重启服务」按钮，可一键重启 DockerCopilot 服务。
+
+**前提条件**：容器需配置重启策略，确保重启后 Docker 自动拉起服务：
+
+```yaml
+# Docker Compose
+restart: always  # 或 unless-stopped
+```
+
+```bash
+# Docker Run
+docker run --restart=always ...  # 或 --restart=unless-stopped
+```
+
+> 点击重启后，页面会在 5 秒后自动刷新。若服务尚未就绪，请稍后手动刷新。
 
 ## 开发环境
 
