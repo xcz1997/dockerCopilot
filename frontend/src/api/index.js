@@ -158,6 +158,11 @@ const api = {
     setDefault: (id) => instance.post(`/environment/${id}/default`),
     refresh: (id) => instance.post(`/environment/${id}/refresh`),
     current: () => instance.get('/environment/current')
+  },
+
+  system: {
+    info: () => instance.get('/system/info'),
+    restart: () => instance.post('/system/restart')
   }
 }
 

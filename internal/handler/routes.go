@@ -460,6 +460,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/system/info",
 				Handler: system.SystemInfoHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/system/restart",
+				Handler: system.SystemRestartHandler(serverCtx),
+			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),

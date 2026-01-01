@@ -211,6 +211,17 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
               </svg>
             </button>
+            <!-- 重启服务按钮 - 仅 Local 环境显示 -->
+            <button
+              v-if="env.envType === 'local'"
+              @click="handleRestartService"
+              :disabled="restarting"
+              class="btn btn-warning btn-sm btn-icon"
+              title="重启服务">
+              <svg class="w-4 h-4" :class="{ 'animate-spin': restarting }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -342,6 +353,7 @@ import { useRouter } from 'vue-router'
 import { useEnvironmentsStore } from '@/stores/environments'
 import { useToastStore } from '@/stores/toast'
 import { useConfirmStore } from '@/stores/confirm'
+import api from '@/api'
 
 // 图标 SVG 路径定义
 const iconPaths = {
@@ -403,6 +415,7 @@ const currentEnvironment = computed(() => environmentsStore.currentEnvironment)
 const filterType = ref('all')
 const operatingIds = ref(new Set())
 const refreshing = ref(false)
+const restarting = ref(false)
 
 // 排序相关
 const showSortMenu = ref(false)
@@ -628,6 +641,39 @@ async function handleDelete(env) {
     }
   } finally {
     operatingIds.value.delete(env.id)
+  }
+}
+
+// 重启服务
+async function handleRestartService() {
+  const confirmed = await confirmStore.show({
+    title: '重启服务',
+    message: '确定要重启 DockerCopilot 服务吗？重启期间服务将短暂不可用。',
+    type: 'warning',
+    confirmText: '重启'
+  })
+
+  if (!confirmed) return
+
+  restarting.value = true
+  try {
+    const response = await api.system.restart()
+    if (response.code === 200) {
+      toastStore.success('服务正在重启，请稍候刷新页面...')
+      // 5秒后自动刷新页面
+      setTimeout(() => {
+        window.location.reload()
+      }, 5000)
+    } else {
+      toastStore.error(response.msg || '重启失败')
+      restarting.value = false
+    }
+  } catch (e) {
+    // 重启时连接可能会断开，这是正常的
+    toastStore.success('服务正在重启，请稍候刷新页面...')
+    setTimeout(() => {
+      window.location.reload()
+    }, 5000)
   }
 }
 

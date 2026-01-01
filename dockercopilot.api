@@ -418,5 +418,8 @@ service dockerCopilot {
 service dockerCopilot {
 	@handler systemInfo
 	get /system/info returns (Resp)
+
+	@handler systemRestart
+	post /system/restart returns (Resp)
 }
 
