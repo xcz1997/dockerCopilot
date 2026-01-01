@@ -110,9 +110,9 @@ type GroupCreateReq struct {
 	CheckUpdate        bool   `json:"checkUpdate,default=true"`
 	Priority           int    `json:"priority,default=100"`
 	Enabled            bool   `json:"enabled,default=true"`
-	RestartAfterUpdate bool   `json:"restartAfterUpdate,optional"` // 更新后重启容器
-	StartContainers    bool   `json:"startContainers,optional"`    // 启动停止的容器
-	StopContainers     bool   `json:"stopContainers,optional"`     // 关闭运行中的容器
+	RestartAfterUpdate bool   `json:"restartAfterUpdate,optional"` // 重启容器
+	StartContainers    bool   `json:"startContainers,optional"`    // 启动容器
+	StopContainers     bool   `json:"stopContainers,optional"`     // 停止容器
 }
 
 type GroupUpdateReq struct {
@@ -124,9 +124,9 @@ type GroupUpdateReq struct {
 	CheckUpdate        bool   `json:"checkUpdate,optional"`
 	Priority           int    `json:"priority,optional"`
 	Enabled            bool   `json:"enabled,optional"`
-	RestartAfterUpdate bool   `json:"restartAfterUpdate,optional"` // 更新后重启容器
-	StartContainers    bool   `json:"startContainers,optional"`    // 启动停止的容器
-	StopContainers     bool   `json:"stopContainers,optional"`     // 关闭运行中的容器
+	RestartAfterUpdate bool   `json:"restartAfterUpdate,optional"` // 重启容器
+	StartContainers    bool   `json:"startContainers,optional"`    // 启动容器
+	StopContainers     bool   `json:"stopContainers,optional"`     // 停止容器
 }
 
 type GroupIdReq struct {

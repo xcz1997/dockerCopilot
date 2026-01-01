@@ -22,9 +22,9 @@ type ContainerGroup struct {
 	CheckUpdate        bool      `json:"checkUpdate"`
 	Priority           int       `json:"priority"`
 	Enabled            bool      `json:"enabled"`
-	RestartAfterUpdate bool      `json:"restartAfterUpdate"` // 更新后重启容器
-	StartContainers    bool      `json:"startContainers"`    // 启动停止的容器
-	StopContainers     bool      `json:"stopContainers"`     // 关闭运行中的容器
+	RestartAfterUpdate bool      `json:"restartAfterUpdate"` // 重启容器
+	StartContainers    bool      `json:"startContainers"`    // 启动容器
+	StopContainers     bool      `json:"stopContainers"`     // 停止容器
 	CreatedAt          time.Time `json:"createdAt"`
 	UpdatedAt          time.Time `json:"updatedAt"`
 }

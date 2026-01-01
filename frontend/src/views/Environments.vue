@@ -7,6 +7,37 @@
         <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">管理本地和远程 Docker 环境</p>
       </div>
       <div class="flex items-center gap-2">
+        <!-- 排序按钮 -->
+        <div class="relative">
+          <button
+            @click="showSortMenu = !showSortMenu"
+            class="btn btn-secondary btn-sm"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+            </svg>
+            <span class="ml-1">{{ getSortLabel() }}</span>
+            <svg class="w-3 h-3 ml-1" :class="{ 'rotate-180': sortOrder === 'desc' }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+            </svg>
+          </button>
+          <!-- 排序菜单 -->
+          <div v-if="showSortMenu" class="absolute right-0 mt-1 w-36 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-20">
+            <button
+              v-for="option in sortOptions"
+              :key="option.field"
+              @click="toggleSort(option.field)"
+              class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between"
+              :class="sortField === option.field ? 'text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-300'"
+            >
+              {{ option.label }}
+              <svg v-if="sortField === option.field" class="w-4 h-4" :class="{ 'rotate-180': sortOrder === 'desc' }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
         <button @click="refreshAll" :disabled="refreshing" class="btn btn-secondary btn-sm">
           <svg class="w-4 h-4 mr-1" :class="{ 'animate-spin': refreshing }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -373,6 +404,31 @@ const filterType = ref('all')
 const operatingIds = ref(new Set())
 const refreshing = ref(false)
 
+// 排序相关
+const showSortMenu = ref(false)
+const sortField = ref('name')  // name, createdAt
+const sortOrder = ref('asc')   // asc, desc
+
+const sortOptions = [
+  { field: 'name', label: '名称' },
+  { field: 'createdAt', label: '创建时间' }
+]
+
+function toggleSort(field) {
+  if (sortField.value === field) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortField.value = field
+    sortOrder.value = 'asc'
+  }
+  showSortMenu.value = false
+}
+
+function getSortLabel() {
+  const option = sortOptions.find(o => o.field === sortField.value)
+  return option ? option.label : '排序'
+}
+
 // 弹窗状态
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
@@ -423,6 +479,23 @@ const filteredEnvironments = computed(() => {
   } else if (filterType.value === 'online') {
     result = result.filter(e => e.status === 'online')
   }
+
+  // 排序
+  result = [...result].sort((a, b) => {
+    let aVal, bVal
+    if (sortField.value === 'name') {
+      aVal = a.name?.toLowerCase() || ''
+      bVal = b.name?.toLowerCase() || ''
+    } else if (sortField.value === 'createdAt') {
+      aVal = a.createdAt || ''
+      bVal = b.createdAt || ''
+    }
+
+    if (aVal < bVal) return sortOrder.value === 'asc' ? -1 : 1
+    if (aVal > bVal) return sortOrder.value === 'asc' ? 1 : -1
+    return 0
+  })
+
   return result
 })
 

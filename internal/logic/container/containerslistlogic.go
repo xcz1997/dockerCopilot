@@ -44,6 +44,7 @@ type Info struct {
 	UsingImage  string `json:"usingImage"`
 	CreateImage string `json:"createImage"`
 	CreateTime  string `json:"createTime"`
+	StartedAt   string `json:"startedAt"`   // 最近一次启动时间
 	RunningTime string `json:"runningTime"`
 	HaveUpdate  bool   `json:"haveUpdate"`
 	IsSelf      bool   `json:"isSelf"`
@@ -129,6 +130,10 @@ func (l *ContainersListLogic) ContainersList() (resp *types.Resp, err error) {
 		containerInfo.CreateImage = containerInspect.Config.Image
 		t := time.Unix(v.Created, 0)
 		containerInfo.CreateTime = t.Format("2006-01-02 15:04:05")
+		// 获取最近一次启动时间
+		if containerInspect.State != nil && containerInspect.State.StartedAt != "" {
+			containerInfo.StartedAt = containerInspect.State.StartedAt
+		}
 		containerInfo.RunningTime = v.Status
 		containerInfo.HaveUpdate = v.Update
 		// 检测是否为自身容器

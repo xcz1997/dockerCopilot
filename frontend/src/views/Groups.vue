@@ -815,13 +815,16 @@ const availableContainers = availableItems
               <span class="text-sm text-gray-700 dark:text-gray-300">启用</span>
             </label>
           </div>
-          <!-- 容器操作选项（仅容器类型显示） -->
+          <!-- 定时容器操作（仅容器类型显示） -->
           <div v-if="newGroup.groupType === 'container'" class="space-y-2 pt-4 border-t border-gray-200 dark:border-gray-600">
-            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">容器操作选项</p>
+            <div class="flex items-center gap-2">
+              <p class="text-sm font-medium text-gray-700 dark:text-gray-300">定时容器操作</p>
+              <span class="text-xs text-gray-500 dark:text-gray-400">(按 Cron 表达式定时执行)</span>
+            </div>
             <div class="flex flex-wrap items-center gap-4">
               <label class="flex items-center gap-2">
                 <input v-model="newGroup.restartAfterUpdate" type="checkbox" class="checkbox">
-                <span class="text-sm text-gray-700 dark:text-gray-300">更新后重启</span>
+                <span class="text-sm text-gray-700 dark:text-gray-300">重启容器</span>
               </label>
               <label class="flex items-center gap-2">
                 <input v-model="newGroup.startContainers" type="checkbox" class="checkbox">
@@ -829,7 +832,7 @@ const availableContainers = availableItems
               </label>
               <label class="flex items-center gap-2">
                 <input v-model="newGroup.stopContainers" type="checkbox" class="checkbox">
-                <span class="text-sm text-gray-700 dark:text-gray-300">关闭容器</span>
+                <span class="text-sm text-gray-700 dark:text-gray-300">停止容器</span>
               </label>
             </div>
           </div>
@@ -895,13 +898,16 @@ const availableContainers = availableItems
               <span class="text-sm text-gray-700 dark:text-gray-300">启用</span>
             </label>
           </div>
-          <!-- 容器操作选项（仅容器类型显示） -->
+          <!-- 定时容器操作（仅容器类型显示） -->
           <div v-if="editingGroup.groupType === 'container'" class="space-y-2 pt-4 border-t border-gray-200 dark:border-gray-600">
-            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">容器操作选项</p>
+            <div class="flex items-center gap-2">
+              <p class="text-sm font-medium text-gray-700 dark:text-gray-300">定时容器操作</p>
+              <span class="text-xs text-gray-500 dark:text-gray-400">(按 Cron 表达式定时执行)</span>
+            </div>
             <div class="flex flex-wrap items-center gap-4">
               <label class="flex items-center gap-2">
                 <input v-model="editingGroup.restartAfterUpdate" type="checkbox" class="checkbox">
-                <span class="text-sm text-gray-700 dark:text-gray-300">更新后重启</span>
+                <span class="text-sm text-gray-700 dark:text-gray-300">重启容器</span>
               </label>
               <label class="flex items-center gap-2">
                 <input v-model="editingGroup.startContainers" type="checkbox" class="checkbox">
@@ -909,7 +915,7 @@ const availableContainers = availableItems
               </label>
               <label class="flex items-center gap-2">
                 <input v-model="editingGroup.stopContainers" type="checkbox" class="checkbox">
-                <span class="text-sm text-gray-700 dark:text-gray-300">关闭容器</span>
+                <span class="text-sm text-gray-700 dark:text-gray-300">停止容器</span>
               </label>
             </div>
           </div>

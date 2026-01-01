@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/robfig/cron/v3"
 	"github.com/xcz1997/dockerCopilot/internal/model"
@@ -267,35 +268,35 @@ func (s *GroupScheduler) executeGroupUpdate(groupID int64) {
 	logx.Infof("群组[%s]强制更新完成", group.Name)
 }
 
-// executeGroupWithProgress 执行群组检查任务（带进度跟踪）
+// executeGroupWithProgress 执行群组定时任务（带进度跟踪）
 func (s *GroupScheduler) executeGroupWithProgress(groupID int64, taskID string) {
-	taskName := fmt.Sprintf("群组检查 #%d", groupID)
+	taskName := fmt.Sprintf("群组任务 #%d", groupID)
 	groupIDStr := fmt.Sprintf("%d", groupID)
 
 	group, err := model.GetGroupByID(groupID)
 	if err != nil {
 		logx.Errorf("获取群组[%d]失败: %v", groupID, err)
-		s.updateProgressWithMeta(taskID, 0, "获取群组失败", taskName, err.Error(), true, "group_check", groupIDStr, "")
+		s.updateProgressWithMeta(taskID, 0, "获取群组失败", taskName, err.Error(), true, "group_task", groupIDStr, "")
 		return
 	}
 
-	taskName = fmt.Sprintf("群组检查: %s", group.Name)
-	s.updateProgressWithMeta(taskID, 5, "开始检查群组", taskName, "正在获取匹配的容器", false, "group_check", groupIDStr, group.Name)
+	taskName = fmt.Sprintf("群组任务: %s", group.Name)
+	s.updateProgressWithMeta(taskID, 5, "开始执行群组任务", taskName, "正在获取匹配的容器", false, "group_task", groupIDStr, group.Name)
 
 	if !group.Enabled {
-		s.updateProgressWithMeta(taskID, 100, "群组已禁用", taskName, "跳过执行", true, "group_check", groupIDStr, group.Name)
+		s.updateProgressWithMeta(taskID, 100, "群组已禁用", taskName, "跳过执行", true, "group_task", groupIDStr, group.Name)
 		return
 	}
 
 	containers, err := s.getMatchedContainers(groupID)
 	if err != nil {
 		logx.Errorf("获取群组[%s]容器失败: %v", group.Name, err)
-		s.updateProgressWithMeta(taskID, 0, "获取容器失败", taskName, err.Error(), true, "group_check", groupIDStr, group.Name)
+		s.updateProgressWithMeta(taskID, 0, "获取容器失败", taskName, err.Error(), true, "group_task", groupIDStr, group.Name)
 		return
 	}
 
 	if len(containers) == 0 {
-		s.updateProgressWithMeta(taskID, 100, "完成", taskName, "没有匹配的容器", true, "group_check", groupIDStr, group.Name)
+		s.updateProgressWithMeta(taskID, 100, "完成", taskName, "没有匹配的容器", true, "group_task", groupIDStr, group.Name)
 		return
 	}
 
@@ -304,63 +305,88 @@ func (s *GroupScheduler) executeGroupWithProgress(groupID int64, taskID string) 
 	failed := 0
 	skipped := 0
 
-	s.updateProgress(taskID, 10, fmt.Sprintf("找到 %d 个容器", total), taskName, "开始检查更新", false)
+	s.updateProgress(taskID, 10, fmt.Sprintf("找到 %d 个容器", total), taskName, "开始执行任务", false)
 
 	hasUpdateCount := 0 // 检查模式下，有可用更新的数量
 	var taskDetails []module.TaskDetail
 
-	for i, container := range containers {
-		progress := 10 + (i+1)*80/total
-		s.updateProgress(taskID, progress, fmt.Sprintf("检查 %s (%d/%d)", container.Name, i+1, total), taskName, "", false)
+	// 执行检查/更新任务（如果启用了 CheckUpdate）
+	if group.CheckUpdate {
+		for i, ctr := range containers {
+			progress := 10 + (i+1)*40/total
+			s.updateProgress(taskID, progress, fmt.Sprintf("检查 %s (%d/%d)", ctr.Name, i+1, total), taskName, "", false)
 
-		// 更新子任务状态
-		s.updateSubTask(taskID, container.Name, "in_progress", "检查中...")
+			// 更新子任务状态
+			s.updateSubTask(taskID, ctr.Name, "in_progress", "检查中...")
 
-		if group.CheckUpdate {
 			if group.AutoUpdate {
-				result := s.checkAndUpdateWithResult(group, container)
+				result := s.checkAndUpdateWithResult(group, ctr)
 				if result == "updated" {
 					updated++
-					s.updateSubTask(taskID, container.Name, "completed", "已更新")
-					taskDetails = append(taskDetails, module.TaskDetail{Name: container.Name, Status: "updated"})
+					s.updateSubTask(taskID, ctr.Name, "completed", "已更新")
+					taskDetails = append(taskDetails, module.TaskDetail{Name: ctr.Name, Status: "updated"})
 				} else if result == "failed" {
 					failed++
-					s.updateSubTask(taskID, container.Name, "failed", "更新失败")
-					taskDetails = append(taskDetails, module.TaskDetail{Name: container.Name, Status: "failed", Message: "更新失败"})
+					s.updateSubTask(taskID, ctr.Name, "failed", "更新失败")
+					taskDetails = append(taskDetails, module.TaskDetail{Name: ctr.Name, Status: "failed", Message: "更新失败"})
 				} else {
 					skipped++
-					s.updateSubTask(taskID, container.Name, "completed", "已是最新")
+					s.updateSubTask(taskID, ctr.Name, "completed", "已是最新")
 				}
 			} else {
-				hasUpdate := s.checkOnly(group, container)
+				hasUpdate := s.checkOnly(group, ctr)
 				if hasUpdate {
 					hasUpdateCount++
-					s.updateSubTask(taskID, container.Name, "completed", "有可用更新")
-					taskDetails = append(taskDetails, module.TaskDetail{Name: container.Name, Status: "has_update"})
+					s.updateSubTask(taskID, ctr.Name, "completed", "有可用更新")
+					taskDetails = append(taskDetails, module.TaskDetail{Name: ctr.Name, Status: "has_update"})
 				} else {
 					skipped++
-					s.updateSubTask(taskID, container.Name, "completed", "已是最新")
+					s.updateSubTask(taskID, ctr.Name, "completed", "已是最新")
 				}
 			}
 		}
 	}
 
-	summary := fmt.Sprintf("已检查 %d 个容器", total)
-	if group.AutoUpdate {
-		summary = fmt.Sprintf("更新: %d, 跳过: %d, 失败: %d", updated, skipped, failed)
-	} else if hasUpdateCount > 0 {
-		summary = fmt.Sprintf("发现 %d 个可更新, %d 个已是最新", hasUpdateCount, skipped)
+	// 执行容器操作（独立于更新，按 cron 定时执行）
+	s.executeContainerOperations(group, containers, taskID, taskName, groupIDStr)
+
+	// 生成任务摘要
+	var summaryParts []string
+	if group.CheckUpdate {
+		if group.AutoUpdate {
+			summaryParts = append(summaryParts, fmt.Sprintf("更新: %d, 跳过: %d, 失败: %d", updated, skipped, failed))
+		} else if hasUpdateCount > 0 {
+			summaryParts = append(summaryParts, fmt.Sprintf("发现 %d 个可更新", hasUpdateCount))
+		}
+	}
+	if group.RestartAfterUpdate {
+		summaryParts = append(summaryParts, "已执行重启")
+	}
+	if group.StartContainers {
+		summaryParts = append(summaryParts, "已执行启动")
+	}
+	if group.StopContainers {
+		summaryParts = append(summaryParts, "已执行停止")
 	}
 
-	s.updateProgressWithMeta(taskID, 100, "检查完成", taskName, summary, true, "group_check", groupIDStr, group.Name)
-	logx.Infof("群组[%s]检查任务执行完成: %s", group.Name, summary)
+	summary := "任务完成"
+	if len(summaryParts) > 0 {
+		summary = fmt.Sprintf("%s (%d 个容器)", summaryParts[0], total)
+		if len(summaryParts) > 1 {
+			summary = fmt.Sprintf("%s; %s", summaryParts[0], summaryParts[1])
+		}
+	}
+
+	s.updateProgressWithMeta(taskID, 100, "全部完成", taskName, summary, true, "group_task", groupIDStr, group.Name)
+	logx.Infof("群组[%s]定时任务执行完成: %s", group.Name, summary)
 
 	// 发送 Bark 通知
-	if group.AutoUpdate {
-		module.NotifyGroupTaskCompleteWithDetails(group.Name, "update", updated, skipped, failed, taskDetails)
-	} else {
-		// 检查模式：hasUpdateCount 表示有可用更新的数量
-		module.NotifyGroupTaskCompleteWithDetails(group.Name, "check", hasUpdateCount, skipped, 0, taskDetails)
+	if group.CheckUpdate {
+		if group.AutoUpdate {
+			module.NotifyGroupTaskCompleteWithDetails(group.Name, "update", updated, skipped, failed, taskDetails)
+		} else {
+			module.NotifyGroupTaskCompleteWithDetails(group.Name, "check", hasUpdateCount, skipped, 0, taskDetails)
+		}
 	}
 }
 
@@ -466,6 +492,99 @@ func (s *GroupScheduler) executeContainerGroupUpdate(group *model.ContainerGroup
 
 	// 发送 Bark 通知
 	module.NotifyGroupTaskCompleteWithDetails(group.Name, "update", updated, skipped, failed, taskDetails)
+}
+
+// executeContainerOperations 执行容器操作（重启/启动/停止）
+func (s *GroupScheduler) executeContainerOperations(group *model.ContainerGroup, containers []MatchedContainer, taskID, taskName, groupIDStr string) {
+	ctx := context.Background()
+
+	// 重启容器
+	if group.RestartAfterUpdate {
+		logx.Infof("群组[%s]开始执行重启容器操作", group.Name)
+		s.updateProgress(taskID, 96, "执行重启操作", taskName, "正在重启容器...", false)
+
+		restartSuccess := 0
+		restartFailed := 0
+		for _, c := range containers {
+			err := s.dockerClient.ContainerRestart(ctx, c.ID, container.StopOptions{})
+			if err != nil {
+				logx.Errorf("重启容器[%s]失败: %v", c.Name, err)
+				restartFailed++
+			} else {
+				logx.Infof("重启容器[%s]成功", c.Name)
+				restartSuccess++
+			}
+		}
+		logx.Infof("群组[%s]重启操作完成: 成功 %d, 失败 %d", group.Name, restartSuccess, restartFailed)
+	}
+
+	// 启动容器
+	if group.StartContainers {
+		logx.Infof("群组[%s]开始执行启动容器操作", group.Name)
+		s.updateProgress(taskID, 97, "执行启动操作", taskName, "正在启动容器...", false)
+
+		startSuccess := 0
+		startFailed := 0
+		startSkipped := 0
+		for _, c := range containers {
+			// 检查容器状态，跳过已运行的
+			inspect, err := s.dockerClient.ContainerInspect(ctx, c.ID)
+			if err != nil {
+				logx.Errorf("检查容器[%s]状态失败: %v", c.Name, err)
+				startFailed++
+				continue
+			}
+
+			if inspect.State.Running {
+				startSkipped++
+				continue
+			}
+
+			err = s.dockerClient.ContainerStart(ctx, c.ID, container.StartOptions{})
+			if err != nil {
+				logx.Errorf("启动容器[%s]失败: %v", c.Name, err)
+				startFailed++
+			} else {
+				logx.Infof("启动容器[%s]成功", c.Name)
+				startSuccess++
+			}
+		}
+		logx.Infof("群组[%s]启动操作完成: 成功 %d, 跳过 %d, 失败 %d", group.Name, startSuccess, startSkipped, startFailed)
+	}
+
+	// 停止容器
+	if group.StopContainers {
+		logx.Infof("群组[%s]开始执行停止容器操作", group.Name)
+		s.updateProgress(taskID, 98, "执行停止操作", taskName, "正在停止容器...", false)
+
+		stopSuccess := 0
+		stopFailed := 0
+		stopSkipped := 0
+		for _, c := range containers {
+			// 检查容器状态，跳过已停止的
+			inspect, err := s.dockerClient.ContainerInspect(ctx, c.ID)
+			if err != nil {
+				logx.Errorf("检查容器[%s]状态失败: %v", c.Name, err)
+				stopFailed++
+				continue
+			}
+
+			if !inspect.State.Running {
+				stopSkipped++
+				continue
+			}
+
+			err = s.dockerClient.ContainerStop(ctx, c.ID, container.StopOptions{})
+			if err != nil {
+				logx.Errorf("停止容器[%s]失败: %v", c.Name, err)
+				stopFailed++
+			} else {
+				logx.Infof("停止容器[%s]成功", c.Name)
+				stopSuccess++
+			}
+		}
+		logx.Infof("群组[%s]停止操作完成: 成功 %d, 跳过 %d, 失败 %d", group.Name, stopSuccess, stopSkipped, stopFailed)
+	}
 }
 
 // executeImageGroupUpdate 执行镜像群组更新
