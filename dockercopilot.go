@@ -11,6 +11,7 @@ import (
 
 	"github.com/xcz1997/dockerCopilot/internal/config"
 	"github.com/xcz1997/dockerCopilot/internal/handler"
+	"github.com/xcz1997/dockerCopilot/internal/middleware"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 	"github.com/xcz1997/dockerCopilot/internal/utiles"
 	"github.com/robfig/cron/v3"
@@ -164,6 +165,11 @@ func main() {
 			}
 		}
 	})
+
+	// 添加远程代理中间件（在远程环境时自动代理请求）
+	remoteProxyMiddleware := middleware.NewRemoteProxyMiddleware(ctx)
+	server.Use(remoteProxyMiddleware.Handle)
+
 	handler.RegisterHandlers(server, ctx)
 	RegisterHandlers(server)
 	fmt.Printf("Starting server at %s:%d...\n", c.Host, c.Port)
