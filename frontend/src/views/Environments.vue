@@ -211,10 +211,9 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
               </svg>
             </button>
-            <!-- 重启服务按钮 - 仅 Local 环境显示 -->
+            <!-- 重启服务按钮 -->
             <button
-              v-if="env.envType === 'local'"
-              @click="handleRestartService"
+              @click="handleRestartService(env)"
               :disabled="restarting"
               class="btn btn-warning btn-sm btn-icon"
               title="重启服务">
@@ -645,10 +644,11 @@ async function handleDelete(env) {
 }
 
 // 重启服务
-async function handleRestartService() {
+async function handleRestartService(env) {
+  const envName = env.name || (env.envType === 'local' ? '本地' : '远程')
   const confirmed = await confirmStore.show({
     title: '重启服务',
-    message: '确定要重启 DockerCopilot 服务吗？重启期间服务将短暂不可用。',
+    message: `确定要重启 ${envName} 环境的 DockerCopilot 服务吗？重启期间该服务将短暂不可用。`,
     type: 'warning',
     confirmText: '重启'
   })
@@ -657,23 +657,41 @@ async function handleRestartService() {
 
   restarting.value = true
   try {
-    const response = await api.system.restart()
+    const response = await api.environments.restart(env.id)
     if (response.code === 200) {
-      toastStore.success('服务正在重启，请稍候刷新页面...')
-      // 5秒后自动刷新页面
-      setTimeout(() => {
-        window.location.reload()
-      }, 5000)
+      if (env.envType === 'local') {
+        toastStore.success('本地服务正在重启，请稍候刷新页面...')
+        // 本地服务重启后刷新页面
+        setTimeout(() => {
+          window.location.reload()
+        }, 5000)
+      } else {
+        toastStore.success(`远程服务 ${envName} 正在重启...`)
+        restarting.value = false
+        // 远程服务重启后刷新环境状态
+        setTimeout(async () => {
+          await environmentsStore.refreshEnvironment(env.id)
+        }, 5000)
+      }
     } else {
       toastStore.error(response.msg || '重启失败')
       restarting.value = false
     }
   } catch (e) {
-    // 重启时连接可能会断开，这是正常的
-    toastStore.success('服务正在重启，请稍候刷新页面...')
-    setTimeout(() => {
-      window.location.reload()
-    }, 5000)
+    if (env.envType === 'local') {
+      // 本地重启时连接断开是正常的
+      toastStore.success('本地服务正在重启，请稍候刷新页面...')
+      setTimeout(() => {
+        window.location.reload()
+      }, 5000)
+    } else {
+      // 远程服务重启，连接断开也是正常的
+      toastStore.success(`远程服务 ${envName} 正在重启...`)
+      restarting.value = false
+      setTimeout(async () => {
+        await environmentsStore.refreshEnvironment(env.id)
+      }, 5000)
+    }
   }
 }
 

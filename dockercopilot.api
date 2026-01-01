@@ -407,6 +407,9 @@ service dockerCopilot {
 
 	@handler environmentCurrent
 	get /environment/current returns (Resp)
+
+	@handler environmentRestart
+	post /environment/:id/restart (EnvironmentIdReq) returns (Resp)
 }
 
 // 系统信息

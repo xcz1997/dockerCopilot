@@ -447,6 +447,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/environment/:id/refresh",
 				Handler: environment.EnvironmentRefreshHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/environment/:id/restart",
+				Handler: environment.EnvironmentRestartHandler(serverCtx),
+			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),

@@ -157,6 +157,7 @@ const api = {
     connect: (id) => instance.post(`/environment/${id}/connect`),
     setDefault: (id) => instance.post(`/environment/${id}/default`),
     refresh: (id) => instance.post(`/environment/${id}/refresh`),
+    restart: (id) => instance.post(`/environment/${id}/restart`),
     current: () => instance.get('/environment/current')
   },
 

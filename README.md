@@ -295,9 +295,12 @@ DockerCopilot 支持连接多个远程 DockerCopilot 实例，实现统一管理
 
 ### 重启服务
 
-在「环境管理」页面，本地环境（Local）提供「重启服务」按钮，可一键重启 DockerCopilot 服务。
+在「环境管理」页面，每个环境都提供「重启服务」按钮，可一键重启对应环境的 DockerCopilot 服务。
 
-**前提条件**：容器需配置重启策略，确保重启后 Docker 自动拉起服务：
+- **本地环境**：直接重启当前运行的容器
+- **远程环境**：调用远程实例的重启 API
+
+**前提条件**：所有环境的容器都需配置重启策略，确保重启后 Docker 自动拉起服务：
 
 ```yaml
 # Docker Compose
@@ -309,7 +312,7 @@ restart: always  # 或 unless-stopped
 docker run --restart=always ...  # 或 --restart=unless-stopped
 ```
 
-> 点击重启后，页面会在 5 秒后自动刷新。若服务尚未就绪，请稍后手动刷新。
+> 本地服务重启后页面会自动刷新；远程服务重启后会自动刷新环境状态。
 
 ## 开发环境
 

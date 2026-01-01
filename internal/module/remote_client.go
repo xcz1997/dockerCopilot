@@ -279,6 +279,20 @@ func (c *RemoteClient) ProxyRequest(method, path string, body interface{}) (json
 	return resp.Data, nil
 }
 
+// Restart 重启远程服务
+func (c *RemoteClient) Restart() error {
+	resp, err := c.doRequest("POST", "/api/system/restart", nil)
+	if err != nil {
+		return err
+	}
+
+	if resp.Code != 200 {
+		return fmt.Errorf("重启远程服务失败: %s", resp.Msg)
+	}
+
+	return nil
+}
+
 // RefreshEnvironmentStats 刷新并更新环境统计信息
 func RefreshEnvironmentStats(env *model.Environment) error {
 	if env.EnvType == model.EnvTypeLocal {
