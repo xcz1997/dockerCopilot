@@ -13,6 +13,9 @@ const sidebarOpen = ref(false)
 const envDropdownOpen = ref(false)
 const switchingEnv = ref(false)
 
+// 环境刷新 key，用于强制刷新子组件
+const refreshKey = ref(0)
+
 // 初始化加载环境列表
 onMounted(async () => {
   await environmentsStore.fetchEnvironments()
@@ -49,8 +52,14 @@ async function switchEnvironment(env) {
     const result = await environmentsStore.connectEnvironment(env.id)
     if (result.success) {
       envDropdownOpen.value = false
-      // 刷新当前页面数据
-      router.go(0)
+      // 刷新环境数据
+      await environmentsStore.fetchEnvironments()
+      // 触发子组件刷新
+      refreshKey.value++
+      // 如果当前不在环境页面，跳转到容器页面
+      if (route.path !== '/environments') {
+        router.push('/containers')
+      }
     }
   } finally {
     switchingEnv.value = false
@@ -250,10 +259,10 @@ function closeSidebar() {
                   class="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-lg
                          border border-gray-200 dark:border-gray-700 py-2 z-50 overflow-hidden"
                 >
-                  <!-- 环境列表 -->
+                  <!-- 环境列表 (Local 环境置顶) -->
                   <div class="max-h-64 overflow-y-auto">
                     <button
-                      v-for="env in environmentsStore.environments"
+                      v-for="env in environmentsStore.sortedEnvironments"
                       :key="env.id"
                       @click="switchEnvironment(env)"
                       :class="[
@@ -340,7 +349,7 @@ function closeSidebar() {
       <main class="p-4 sm:p-6 lg:p-8">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
-            <component :is="Component" />
+            <component :is="Component" :key="refreshKey" />
           </transition>
         </router-view>
       </main>

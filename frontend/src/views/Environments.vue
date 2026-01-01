@@ -480,8 +480,13 @@ const filteredEnvironments = computed(() => {
     result = result.filter(e => e.status === 'online')
   }
 
-  // 排序
+  // 排序: Local 环境始终置顶，其他按用户选择的字段排序
   result = [...result].sort((a, b) => {
+    // Local 环境始终排在最前面
+    if (a.envType === 'local' && b.envType !== 'local') return -1
+    if (a.envType !== 'local' && b.envType === 'local') return 1
+
+    // 其他环境按选择的字段排序
     let aVal, bVal
     if (sortField.value === 'name') {
       aVal = a.name?.toLowerCase() || ''
@@ -719,9 +724,11 @@ async function handleSubmit() {
   }
 }
 
-// 初始化
-onMounted(() => {
-  environmentsStore.fetchEnvironments()
+// 初始化：进入页面时自动刷新所有环境数据
+onMounted(async () => {
+  await environmentsStore.fetchEnvironments()
+  // 自动刷新所有环境的状态
+  environmentsStore.refreshAllEnvironments()
 })
 </script>
 

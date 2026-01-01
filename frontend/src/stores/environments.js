@@ -23,6 +23,15 @@ export const useEnvironmentsStore = defineStore('environments', () => {
     return environments.value.find(e => e.isDefault) || environments.value[0]
   })
 
+  // 排序后的环境列表: Local 环境始终置顶
+  const sortedEnvironments = computed(() => {
+    return [...environments.value].sort((a, b) => {
+      if (a.envType === 'local' && b.envType !== 'local') return -1
+      if (a.envType !== 'local' && b.envType === 'local') return 1
+      return (a.name || '').localeCompare(b.name || '')
+    })
+  })
+
   // 获取环境列表
   async function fetchEnvironments() {
     loading.value = true
@@ -197,6 +206,7 @@ export const useEnvironmentsStore = defineStore('environments', () => {
     // 计算属性
     stats,
     defaultEnvironment,
+    sortedEnvironments,
     // 方法
     fetchEnvironments,
     fetchCurrentEnvironment,
