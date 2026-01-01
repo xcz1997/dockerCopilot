@@ -56,7 +56,8 @@ type MsgResp struct {
 }
 
 type RemoveContainerReq struct {
-	Name string `json:"name"`
+	IdReq
+	Force bool `form:"force,default=false"`
 }
 
 type RemoveImageReq struct {
