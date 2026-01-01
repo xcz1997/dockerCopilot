@@ -48,6 +48,10 @@ const showGroupModal = ref(false)
 const showLogModal = ref(false)
 const showDeleteModal = ref(false)
 const forceDelete = ref(false)
+const deleteImage = ref(false)
+const deleteRelatedContainers = ref(false)
+const imageDependency = ref(null)
+const loadingDependency = ref(false)
 const selectedContainer = ref(null)
 const newContainerName = ref('')
 const operatingIds = ref(new Set())
@@ -325,10 +329,26 @@ function openLogModal(container) {
   showLogModal.value = true
 }
 
-function openDeleteModal(container) {
+async function openDeleteModal(container) {
   selectedContainer.value = container
   forceDelete.value = false
+  deleteImage.value = false
+  deleteRelatedContainers.value = false
+  imageDependency.value = null
   showDeleteModal.value = true
+
+  // 异步获取镜像依赖信息
+  loadingDependency.value = true
+  try {
+    const result = await containersStore.getImageDependency(container.id)
+    if (result.success) {
+      imageDependency.value = result.data
+    }
+  } catch (e) {
+    console.error('获取镜像依赖信息失败:', e)
+  } finally {
+    loadingDependency.value = false
+  }
 }
 
 async function handleDelete() {
@@ -337,10 +357,25 @@ async function handleDelete() {
   operatingIds.value.add(id)
 
   try {
-    const result = await containersStore.removeContainer(id, forceDelete.value)
+    const result = await containersStore.removeContainer(id, {
+      force: forceDelete.value,
+      deleteImage: deleteImage.value,
+      deleteRelatedContainers: deleteRelatedContainers.value
+    })
     if (result.success) {
       showDeleteModal.value = false
-      toastStore.success('删除成功')
+      // 构建成功消息
+      let msg = '容器删除成功'
+      const data = result.data || {}
+      if (data.deletedContainers?.length > 0) {
+        msg += `，同时删除了 ${data.deletedContainers.length} 个关联容器`
+      }
+      if (data.deletedImage) {
+        msg += `，镜像已删除`
+      } else if (data.imageDeleteError && deleteImage.value) {
+        msg += `（镜像删除失败: ${data.imageDeleteError}）`
+      }
+      toastStore.success(msg)
     } else {
       toastStore.error(result.message || '删除失败')
     }
@@ -918,7 +953,7 @@ onMounted(() => {
 
     <!-- 删除确认弹窗 -->
     <div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-      <div class="card w-full max-w-md p-6 animate-scale-in" @click.stop>
+      <div class="card w-full max-w-lg p-6 animate-scale-in max-h-[90vh] overflow-y-auto" @click.stop>
         <div class="flex items-center gap-3 mb-4">
           <div class="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
             <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -945,15 +980,97 @@ onMounted(() => {
           确定要删除容器 <strong class="text-gray-900 dark:text-white">{{ selectedContainer?.name }}</strong> 吗？此操作不可撤销。
         </p>
 
-        <!-- 强制删除选项 -->
-        <label class="flex items-center gap-2 mb-4 cursor-pointer">
-          <input
-            type="checkbox"
-            v-model="forceDelete"
-            class="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
-          />
-          <span class="text-sm text-gray-600 dark:text-gray-400">强制删除（即使容器正在运行）</span>
-        </label>
+        <!-- 删除选项 -->
+        <div class="space-y-3 mb-4">
+          <!-- 强制删除选项 -->
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              v-model="forceDelete"
+              class="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+            />
+            <span class="text-sm text-gray-600 dark:text-gray-400">强制删除（即使容器正在运行）</span>
+          </label>
+
+          <!-- 同时删除镜像选项 -->
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              v-model="deleteImage"
+              class="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+            />
+            <span class="text-sm text-gray-600 dark:text-gray-400">同时删除镜像</span>
+          </label>
+        </div>
+
+        <!-- 镜像依赖信息 -->
+        <div v-if="deleteImage" class="mb-4">
+          <!-- 加载中 -->
+          <div v-if="loadingDependency" class="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
+            <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            正在检查镜像依赖...
+          </div>
+
+          <!-- 镜像信息 -->
+          <div v-else-if="imageDependency" class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+            <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              镜像: <span class="font-medium text-gray-900 dark:text-white">{{ imageDependency.imageName }}</span>
+            </div>
+
+            <!-- 有其他容器依赖 -->
+            <div v-if="imageDependency.dependentContainers?.length > 0">
+              <div class="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-sm mb-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>此镜像被 {{ imageDependency.dependentContainers.length }} 个其他容器使用</span>
+              </div>
+
+              <!-- 依赖容器列表 -->
+              <div class="space-y-1 mb-3 max-h-32 overflow-y-auto">
+                <div
+                  v-for="dep in imageDependency.dependentContainers"
+                  :key="dep.id"
+                  class="flex items-center justify-between text-xs bg-white dark:bg-gray-800 px-2 py-1.5 rounded"
+                >
+                  <span class="font-medium text-gray-900 dark:text-white truncate">{{ dep.name }}</span>
+                  <span :class="[
+                    'px-1.5 py-0.5 rounded text-xs',
+                    dep.status === 'running' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                  ]">
+                    {{ dep.status === 'running' ? '运行中' : '已停止' }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- 关联删除选项 -->
+              <label class="flex items-center gap-2 cursor-pointer p-2 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
+                <input
+                  type="checkbox"
+                  v-model="deleteRelatedContainers"
+                  class="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                />
+                <span class="text-sm text-red-600 dark:text-red-400">同时删除以上关联容器</span>
+              </label>
+
+              <!-- 不删除关联容器时的提示 -->
+              <p v-if="!deleteRelatedContainers" class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                不删除关联容器时，镜像将保留（因为仍被使用）
+              </p>
+            </div>
+
+            <!-- 无其他容器依赖 -->
+            <div v-else class="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              此镜像没有被其他容器使用，可以安全删除
+            </div>
+          </div>
+        </div>
 
         <div class="flex justify-end gap-3">
           <button @click="showDeleteModal = false" class="btn btn-secondary" :disabled="operatingIds.has(selectedContainer?.id)">取消</button>

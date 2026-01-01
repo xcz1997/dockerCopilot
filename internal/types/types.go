@@ -57,7 +57,9 @@ type MsgResp struct {
 
 type RemoveContainerReq struct {
 	IdReq
-	Force bool `form:"force,default=false"`
+	Force                   bool `form:"force,default=false"`
+	DeleteImage             bool `form:"deleteImage,default=false"`
+	DeleteRelatedContainers bool `form:"deleteRelatedContainers,default=false"`
 }
 
 type RemoveImageReq struct {
@@ -293,4 +295,18 @@ type EnvironmentIdReq struct {
 type EnvironmentTestReq struct {
 	URL       string `json:"url"`
 	SecretKey string `json:"secretKey"`
+}
+
+// ======== 容器删除相关类型 ========
+
+type DependentContainer struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
+type ImageDependencyInfo struct {
+	ImageID             string               `json:"imageId"`
+	ImageName           string               `json:"imageName"`
+	DependentContainers []DependentContainer `json:"dependentContainers"`
 }

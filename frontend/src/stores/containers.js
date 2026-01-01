@@ -85,12 +85,24 @@ export const useContainersStore = defineStore('containers', () => {
     }
   }
 
-  async function removeContainer(id, force = false) {
+  async function removeContainer(id, options = {}) {
     try {
-      const response = await api.containers.remove(id, force)
+      const response = await api.containers.remove(id, options)
       if (response.code === 200) {
         await fetchContainers()
-        return { success: true }
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.msg }
+    } catch (e) {
+      return { success: false, message: e.message }
+    }
+  }
+
+  async function getImageDependency(id) {
+    try {
+      const response = await api.containers.getImageDependency(id)
+      if (response.code === 200) {
+        return { success: true, data: response.data }
       }
       return { success: false, message: response.msg }
     } catch (e) {
@@ -108,6 +120,7 @@ export const useContainersStore = defineStore('containers', () => {
     restartContainer,
     renameContainer,
     updateContainer,
-    removeContainer
+    removeContainer,
+    getImageDependency
   }
 })

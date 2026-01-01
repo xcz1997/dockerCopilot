@@ -2,7 +2,6 @@ package container
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/xcz1997/dockerCopilot/internal/model"
 	"github.com/xcz1997/dockerCopilot/internal/module"
@@ -13,35 +12,29 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-type RemoveLogic struct {
+type ImageDependencyLogic struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
-func NewRemoveLogic(ctx context.Context, svcCtx *svc.ServiceContext) *RemoveLogic {
-	return &RemoveLogic{
+func NewImageDependencyLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ImageDependencyLogic {
+	return &ImageDependencyLogic{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
 }
 
-func (l *RemoveLogic) Remove(req *types.RemoveContainerReq) (resp *types.Resp, err error) {
+func (l *ImageDependencyLogic) ImageDependency(req *types.IdReq) (resp *types.Resp, err error) {
 	resp = &types.Resp{}
 
 	// 检查是否为远程环境
 	if l.svcCtx.CurrentEnvironment != nil && l.svcCtx.CurrentEnvironment.EnvType == model.EnvTypeRemote {
-		return l.remoteRemove(req)
+		return l.remoteImageDependency(req)
 	}
 
-	opts := utiles.RemoveContainerOptions{
-		Force:                   req.Force,
-		DeleteImage:             req.DeleteImage,
-		DeleteRelatedContainers: req.DeleteRelatedContainers,
-	}
-
-	result, err := utiles.RemoveContainerWithOptions(l.svcCtx, req.Id, opts)
+	info, err := utiles.GetImageDependencyInfo(l.svcCtx, req.Id)
 	if err != nil {
 		resp.Code = 400
 		resp.Msg = err.Error()
@@ -51,15 +44,11 @@ func (l *RemoveLogic) Remove(req *types.RemoveContainerReq) (resp *types.Resp, e
 
 	resp.Code = 200
 	resp.Msg = "success"
-	resp.Data = map[string]interface{}{
-		"deletedContainers": result.DeletedContainers,
-		"deletedImage":      result.DeletedImage,
-		"imageDeleteError":  result.ImageDeleteError,
-	}
+	resp.Data = info
 	return resp, nil
 }
 
-func (l *RemoveLogic) remoteRemove(req *types.RemoveContainerReq) (resp *types.Resp, err error) {
+func (l *ImageDependencyLogic) remoteImageDependency(req *types.IdReq) (resp *types.Resp, err error) {
 	resp = &types.Resp{}
 	client := l.svcCtx.RemoteClient
 	if client == nil {
@@ -67,19 +56,16 @@ func (l *RemoveLogic) remoteRemove(req *types.RemoveContainerReq) (resp *types.R
 		client = module.NewRemoteClientWithToken(env.URL, env.SecretKey, env.JWTToken)
 	}
 
-	url := fmt.Sprintf("/api/container/%s?force=%t&deleteImage=%t&deleteRelatedContainers=%t",
-		req.Id, req.Force, req.DeleteImage, req.DeleteRelatedContainers)
-
-	_, err = client.ProxyRequest("DELETE", url, nil)
+	data, err := client.ProxyRequest("GET", "/api/container/"+req.Id+"/image-dependency", nil)
 	if err != nil {
 		resp.Code = 400
-		resp.Msg = "远程删除容器失败: " + err.Error()
+		resp.Msg = "获取镜像依赖信息失败: " + err.Error()
 		resp.Data = map[string]interface{}{}
 		return resp, nil
 	}
 
 	resp.Code = 200
 	resp.Msg = "success"
-	resp.Data = map[string]interface{}{}
+	resp.Data = data
 	return resp, nil
 }

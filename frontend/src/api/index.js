@@ -51,7 +51,14 @@ const api = {
       params.append('containerName', containerName)
       return instance.post(`/container/${id}/update`, params.toString())
     },
-    remove: (id, force = false) => instance.delete(`/container/${id}`, { params: { force } })
+    remove: (id, options = {}) => instance.delete(`/container/${id}`, {
+      params: {
+        force: options.force || false,
+        deleteImage: options.deleteImage || false,
+        deleteRelatedContainers: options.deleteRelatedContainers || false
+      }
+    }),
+    getImageDependency: (id) => instance.get(`/container/${id}/image-dependency`)
   },
 
   images: {

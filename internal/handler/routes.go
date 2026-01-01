@@ -76,6 +76,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			},
 			{
 				Method:  http.MethodGet,
+				Path:    "/container/:id/image-dependency",
+				Handler: container.ImageDependencyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
 				Path:    "/container/backup",
 				Handler: container.BackupHandler(serverCtx),
 			},

@@ -43,7 +43,9 @@ type CreateContainerReq {
 
 type RemoveContainerReq {
 	IdReq
-	Force bool `form:"force,default=false"`
+	Force                   bool `form:"force,default=false"`
+	DeleteImage             bool `form:"deleteImage,default=false"`
+	DeleteRelatedContainers bool `form:"deleteRelatedContainers,default=false"`
 }
 
 type getNewImageReq {
@@ -225,6 +227,9 @@ service dockerCopilot {
 
 	@handler remove
 	delete /container/:id (RemoveContainerReq) returns (Resp)
+
+	@handler imageDependency
+	get /container/:id/image-dependency (IdReq) returns (Resp)
 
 	@handler backup
 	get /container/backup returns (Resp)
