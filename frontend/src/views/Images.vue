@@ -804,51 +804,49 @@ onMounted(() => {
     </div>
 
     <!-- 修改 Tag 弹窗 -->
-    <div v-if="showTagModal" class="modal-overlay" @click.self="showTagModal = false">
-      <div class="modal-content max-w-md">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">修改镜像 Tag</h3>
-          <button @click="showTagModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+    <div v-if="showTagModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+      <div class="card w-full max-w-md p-6 animate-scale-in" @click.stop>
+        <div class="flex items-center gap-3 mb-4">
+          <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+            <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
             </svg>
-          </button>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">修改镜像 Tag</h3>
         </div>
 
-        <div class="mb-4">
-          <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-            修改镜像 <strong class="text-gray-900 dark:text-white">{{ selectedImage?.name }}</strong> 的 tag
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          修改镜像 <strong class="text-gray-900 dark:text-white">{{ selectedImage?.name }}</strong> 的 tag
+        </p>
+
+        <div class="space-y-3 mb-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">当前 Tag</label>
+            <div class="input bg-gray-100 dark:bg-gray-700 cursor-not-allowed">{{ selectedImage?.tag }}</div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">新 Tag</label>
+            <input
+              v-model="newTagInput"
+              type="text"
+              class="input w-full"
+              placeholder="例如 v1.2.3"
+              :disabled="updatingTagIds.has(selectedImage?.id)"
+            />
+          </div>
+        </div>
+
+        <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
+          <p class="text-xs text-amber-700 dark:text-amber-400">
+            <svg class="w-4 h-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            修改 tag 后，所有使用此镜像的容器将被自动重建
           </p>
-
-          <div class="space-y-3">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">当前 Tag</label>
-              <div class="input bg-gray-100 dark:bg-gray-700 cursor-not-allowed">{{ selectedImage?.tag }}</div>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">新 Tag</label>
-              <input
-                v-model="newTagInput"
-                type="text"
-                class="input w-full"
-                placeholder="例如 v1.2.3"
-                :disabled="updatingTagIds.has(selectedImage?.id)"
-              />
-            </div>
-          </div>
-
-          <div class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-            <p class="text-xs text-amber-700 dark:text-amber-400">
-              <svg class="w-4 h-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              修改 tag 后，所有使用此镜像的容器将被自动重建
-            </p>
-          </div>
         </div>
 
-        <div class="flex justify-end gap-2">
+        <div class="flex justify-end gap-3">
           <button @click="showTagModal = false" class="btn btn-secondary" :disabled="updatingTagIds.has(selectedImage?.id)">取消</button>
           <button
             @click="handleTagChange"

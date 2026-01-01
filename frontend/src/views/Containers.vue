@@ -46,6 +46,8 @@ const showRenameModal = ref(false)
 const showUpdateModal = ref(false)
 const showGroupModal = ref(false)
 const showLogModal = ref(false)
+const showDeleteModal = ref(false)
+const forceDelete = ref(false)
 const selectedContainer = ref(null)
 const newContainerName = ref('')
 const operatingIds = ref(new Set())
@@ -321,6 +323,30 @@ function openGroupModal(container) {
 function openLogModal(container) {
   selectedContainer.value = container
   showLogModal.value = true
+}
+
+function openDeleteModal(container) {
+  selectedContainer.value = container
+  forceDelete.value = false
+  showDeleteModal.value = true
+}
+
+async function handleDelete() {
+  const container = selectedContainer.value
+  const id = container.id
+  operatingIds.value.add(id)
+
+  try {
+    const result = await containersStore.removeContainer(id, forceDelete.value)
+    if (result.success) {
+      showDeleteModal.value = false
+      toastStore.success('删除成功')
+    } else {
+      toastStore.error(result.message || '删除失败')
+    }
+  } finally {
+    operatingIds.value.delete(id)
+  }
 }
 
 async function handleAssignGroup() {
@@ -636,6 +662,7 @@ onMounted(() => {
           <div class="flex items-center gap-1.5 sm:gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
             <template v-if="container.status?.toLowerCase() === 'running'">
               <button
+                v-if="!container.isSelf"
                 @click="handleAction(container, 'stop')"
                 :disabled="operatingIds.has(container.id)"
                 class="btn btn-sm btn-ghost text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 px-2 sm:px-3"
@@ -686,6 +713,7 @@ onMounted(() => {
             </button>
 
             <button
+              v-if="!container.isSelf"
               @click="openGroupModal(container)"
               :disabled="operatingIds.has(container.id)"
               class="btn btn-sm btn-ghost text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 px-2"
@@ -703,6 +731,18 @@ onMounted(() => {
             >
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+            </button>
+
+            <button
+              v-if="!container.isSelf"
+              @click="openDeleteModal(container)"
+              :disabled="operatingIds.has(container.id)"
+              class="btn btn-sm btn-ghost text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 px-2"
+              title="删除"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </button>
 
@@ -875,5 +915,61 @@ onMounted(() => {
       :container-name="selectedContainer?.name || ''"
       @close="showLogModal = false"
     />
+
+    <!-- 删除确认弹窗 -->
+    <div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+      <div class="card w-full max-w-md p-6 animate-scale-in" @click.stop>
+        <div class="flex items-center gap-3 mb-4">
+          <div class="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
+            <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">删除容器</h3>
+        </div>
+
+        <!-- 自身容器警告 -->
+        <div v-if="selectedContainer?.isSelf" class="mb-4 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+          <div class="flex items-center gap-2 text-red-600 dark:text-red-400 font-medium mb-2">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>警告：这是 DockerCopilot 自身的容器！</span>
+          </div>
+          <p class="text-sm text-red-600 dark:text-red-400">
+            删除此容器会导致服务完全停止，请谨慎操作。
+          </p>
+        </div>
+
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+          确定要删除容器 <strong class="text-gray-900 dark:text-white">{{ selectedContainer?.name }}</strong> 吗？此操作不可撤销。
+        </p>
+
+        <!-- 强制删除选项 -->
+        <label class="flex items-center gap-2 mb-4 cursor-pointer">
+          <input
+            type="checkbox"
+            v-model="forceDelete"
+            class="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+          />
+          <span class="text-sm text-gray-600 dark:text-gray-400">强制删除（即使容器正在运行）</span>
+        </label>
+
+        <div class="flex justify-end gap-3">
+          <button @click="showDeleteModal = false" class="btn btn-secondary" :disabled="operatingIds.has(selectedContainer?.id)">取消</button>
+          <button
+            @click="handleDelete"
+            class="btn bg-red-600 hover:bg-red-700 text-white"
+            :disabled="operatingIds.has(selectedContainer?.id)"
+          >
+            <svg v-if="operatingIds.has(selectedContainer?.id)" class="w-4 h-4 animate-spin mr-1" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            {{ operatingIds.has(selectedContainer?.id) ? '删除中...' : '确认删除' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

@@ -50,7 +50,8 @@ const api = {
       params.append('imageNameAndTag', imageNameAndTag)
       params.append('containerName', containerName)
       return instance.post(`/container/${id}/update`, params.toString())
-    }
+    },
+    remove: (id, force = false) => instance.delete(`/container/${id}`, { params: { force } })
   },
 
   images: {

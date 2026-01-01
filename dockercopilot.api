@@ -42,7 +42,8 @@ type CreateContainerReq {
 }
 
 type RemoveContainerReq {
-	Name string `json:"name"`
+	IdReq
+	Force bool `form:"force,default=false"`
 }
 
 type getNewImageReq {
@@ -221,6 +222,9 @@ service dockerCopilot {
 
 	@handler update
 	post /container/:id/update (ContainerUpdateReq) returns (Resp)
+
+	@handler remove
+	delete /container/:id (RemoveContainerReq) returns (Resp)
 
 	@handler backup
 	get /container/backup returns (Resp)

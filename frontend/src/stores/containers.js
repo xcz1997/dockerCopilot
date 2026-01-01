@@ -85,6 +85,19 @@ export const useContainersStore = defineStore('containers', () => {
     }
   }
 
+  async function removeContainer(id, force = false) {
+    try {
+      const response = await api.containers.remove(id, force)
+      if (response.code === 200) {
+        await fetchContainers()
+        return { success: true }
+      }
+      return { success: false, message: response.msg }
+    } catch (e) {
+      return { success: false, message: e.message }
+    }
+  }
+
   return {
     containers,
     loading,
@@ -94,6 +107,7 @@ export const useContainersStore = defineStore('containers', () => {
     stopContainer,
     restartContainer,
     renameContainer,
-    updateContainer
+    updateContainer,
+    removeContainer
   }
 })
