@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	dockerMsgType "github.com/docker/docker/pkg/jsonmessage"
+	"github.com/xcz1997/dockerCopilot/internal/module"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 	MyType "github.com/xcz1997/dockerCopilot/internal/types"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -54,7 +55,14 @@ func UpdateContainer(serviceContext *svc.ServiceContext, id string, name string,
 	oldTaskProgress.Percentage = 10
 	oldTaskProgress.DetailMsg = "正在拉取新镜像"
 	serviceContext.UpdateProgress(taskID, oldTaskProgress)
-	reader, err := serviceContext.DockerClient.ImagePull(ctx, imageNameAndTag, image.PullOptions{})
+
+	// 使用统一的镜像拉取方法（支持加速器和私有 Registry 认证）
+	pullOpts := module.PullImageOptions{
+		ImageName:      imageNameAndTag,
+		UseAccelerator: true,
+		RegistryAuth:   module.GetPullAuthForImageByMeta(oldImageID, imageNameAndTag),
+	}
+	reader, pullResult, err := module.PullImage(ctx, serviceContext.DockerClient, pullOpts)
 	if err != nil {
 		oldTaskProgress.Message = "拉取镜像失败"
 		oldTaskProgress.DetailMsg = err.Error()
@@ -71,6 +79,15 @@ func UpdateContainer(serviceContext *svc.ServiceContext, id string, name string,
 		serviceContext.UpdateProgress(taskID, oldTaskProgress)
 		logx.Errorf("Failed to pull image: %s", err)
 		return err
+	}
+
+	// 如果使用了加速器，需要重新打标签
+	if pullResult.ActualImageName != imageNameAndTag {
+		logx.Infof("重新打标签: %s -> %s", pullResult.ActualImageName, imageNameAndTag)
+		if err := module.TagImage(ctx, serviceContext.DockerClient, pullResult.ActualImageName, imageNameAndTag); err != nil {
+			logx.Errorf("重新打标签失败: %s", err.Error())
+			// 打标签失败不影响整体流程，继续使用加速器的镜像名
+		}
 	}
 	oldTaskProgress, result = serviceContext.GetProgress(taskID)
 	if !result {

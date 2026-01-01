@@ -66,8 +66,13 @@ type RemoveImageReq struct {
 
 type UpdateImageSourceReq struct {
 	IdReq
-	SourceType   string `json:"sourceType"`             // remote, local, private
-	RegistryHost string `json:"registryHost,optional"`  // 私有 Registry 主机（当 sourceType=private 时使用）
+	SourceType   string `json:"sourceType"`            // remote, local, private
+	RegistryHost string `json:"registryHost,optional"` // 私有 Registry 主机（当 sourceType=private 时使用）
+}
+
+type UpdateImageTagReq struct {
+	IdReq
+	NewTag string `json:"newTag"` // 新的镜像标签
 }
 
 type RenameContainerReq struct {

@@ -84,7 +84,13 @@ type RemoveImageReq {
 
 type UpdateImageSourceReq {
 	IdReq
-	SourceType string `json:"sourceType"` // remote, local
+	SourceType   string `json:"sourceType"`            // remote, local, private
+	RegistryHost string `json:"registryHost,optional"` // 私有 Registry 主机
+}
+
+type UpdateImageTagReq {
+	IdReq
+	NewTag string `json:"newTag"` // 新的镜像标签
 }
 
 type ContainerUpdateReq {
@@ -246,6 +252,9 @@ service dockerCopilot {
 
 	@handler updateSource
 	put /image/:id/source (UpdateImageSourceReq) returns (Resp)
+
+	@handler updateTag
+	put /image/:id/tag (UpdateImageTagReq) returns (Resp)
 
 	@handler pull
 	post /image/:id/pull (IdReq) returns (Resp)

@@ -506,8 +506,13 @@ func (e *Executor) CheckUpdate(ctx context.Context, container MatchedContainer) 
 	imageName := e.getImageNameWithTag(ctx, container.ImageID, container.Image)
 	logx.Infof("容器[%s]检查更新使用镜像名称: %s", container.Name, imageName)
 
-	// 拉取远程镜像信息
-	pullOut, err := e.dockerClient.ImagePull(ctx, imageName, image.PullOptions{})
+	// 使用统一的镜像拉取方法（支持加速器和私有 Registry 认证）
+	pullOpts := module.PullImageOptions{
+		ImageName:      imageName,
+		UseAccelerator: true,
+		RegistryAuth:   module.GetPullAuthForImageByMeta(container.ImageID, imageName),
+	}
+	pullOut, pullResult, err := module.PullImage(ctx, e.dockerClient, pullOpts)
 	if err != nil {
 		return false, fmt.Errorf("拉取镜像失败: %w", err)
 	}
@@ -517,6 +522,14 @@ func (e *Executor) CheckUpdate(ctx context.Context, container MatchedContainer) 
 	_, err = io.Copy(io.Discard, pullOut)
 	if err != nil {
 		return false, fmt.Errorf("读取拉取结果失败: %w", err)
+	}
+
+	// 如果使用了加速器，需要重新打标签
+	if pullResult.ActualImageName != imageName {
+		logx.Infof("重新打标签: %s -> %s", pullResult.ActualImageName, imageName)
+		if err := module.TagImage(ctx, e.dockerClient, pullResult.ActualImageName, imageName); err != nil {
+			logx.Errorf("重新打标签失败: %v", err)
+		}
 	}
 
 	// 重新获取镜像信息
@@ -596,7 +609,14 @@ func (e *Executor) UpdateWithProgress(ctx context.Context, mc MatchedContainer, 
 	logx.Infof("容器[%s]使用镜像名称: %s (原始: %s)", mc.Name, imageName, mc.Image)
 	reportProgress(30, "拉取新镜像", fmt.Sprintf("正在拉取镜像 %s", imageName))
 	logx.Infof("拉取新镜像[%s]", imageName)
-	pullOut, err := e.dockerClient.ImagePull(ctx, imageName, image.PullOptions{})
+
+	// 使用统一的镜像拉取方法（支持加速器和私有 Registry 认证）
+	pullOpts := module.PullImageOptions{
+		ImageName:      imageName,
+		UseAccelerator: true,
+		RegistryAuth:   module.GetPullAuthForImageByMeta(mc.ImageID, imageName),
+	}
+	pullOut, pullResult, err := module.PullImage(ctx, e.dockerClient, pullOpts)
 	if err != nil {
 		result.Message = fmt.Sprintf("拉取镜像失败: %v", err)
 		// 尝试恢复
@@ -610,6 +630,14 @@ func (e *Executor) UpdateWithProgress(ctx context.Context, mc MatchedContainer, 
 
 	// 解析镜像拉取进度（拉取过程在30%-60%之间）
 	parsePullProgress(pullOut, 30, 60, onProgress)
+
+	// 如果使用了加速器，需要重新打标签
+	if pullResult.ActualImageName != imageName {
+		logx.Infof("重新打标签: %s -> %s", pullResult.ActualImageName, imageName)
+		if err := module.TagImage(ctx, e.dockerClient, pullResult.ActualImageName, imageName); err != nil {
+			logx.Errorf("重新打标签失败: %v", err)
+		}
+	}
 
 	// 获取新镜像信息
 	newInspect, _, err := e.dockerClient.ImageInspectWithRaw(ctx, imageName)
@@ -724,13 +752,26 @@ func (e *Executor) CheckImageUpdate(ctx context.Context, img MatchedImage) (bool
 		return false, fmt.Errorf("获取本地镜像信息失败: %w", err)
 	}
 
-	// 拉取远程镜像
-	pullOut, err := e.dockerClient.ImagePull(ctx, img.FullName, image.PullOptions{})
+	// 使用统一的镜像拉取方法（支持加速器和私有 Registry 认证）
+	pullOpts := module.PullImageOptions{
+		ImageName:      img.FullName,
+		UseAccelerator: true,
+		RegistryAuth:   module.GetPullAuthForImageByMeta(img.ID, img.FullName),
+	}
+	pullOut, pullResult, err := module.PullImage(ctx, e.dockerClient, pullOpts)
 	if err != nil {
 		return false, fmt.Errorf("拉取镜像失败: %w", err)
 	}
 	defer pullOut.Close()
 	_, _ = io.Copy(io.Discard, pullOut)
+
+	// 如果使用了加速器，需要重新打标签
+	if pullResult.ActualImageName != img.FullName {
+		logx.Infof("重新打标签: %s -> %s", pullResult.ActualImageName, img.FullName)
+		if err := module.TagImage(ctx, e.dockerClient, pullResult.ActualImageName, img.FullName); err != nil {
+			logx.Errorf("重新打标签失败: %v", err)
+		}
+	}
 
 	// 重新获取镜像信息
 	remoteInspect, _, err := e.dockerClient.ImageInspectWithRaw(ctx, img.FullName)
@@ -751,7 +792,13 @@ func (e *Executor) PullImageWithProgress(ctx context.Context, img MatchedImage, 
 		onProgress(10, "开始拉取", fmt.Sprintf("正在拉取镜像 %s", img.FullName))
 	}
 
-	pullOut, err := e.dockerClient.ImagePull(ctx, img.FullName, image.PullOptions{})
+	// 使用统一的镜像拉取方法（支持加速器和私有 Registry 认证）
+	pullOpts := module.PullImageOptions{
+		ImageName:      img.FullName,
+		UseAccelerator: true,
+		RegistryAuth:   module.GetPullAuthForImageByMeta(img.ID, img.FullName),
+	}
+	pullOut, pullResult, err := module.PullImage(ctx, e.dockerClient, pullOpts)
 	if err != nil {
 		return fmt.Errorf("拉取镜像失败: %w", err)
 	}
@@ -759,6 +806,14 @@ func (e *Executor) PullImageWithProgress(ctx context.Context, img MatchedImage, 
 
 	// 解析镜像拉取进度（拉取过程在10%-90%之间）
 	parsePullProgress(pullOut, 10, 90, onProgress)
+
+	// 如果使用了加速器，需要重新打标签
+	if pullResult.ActualImageName != img.FullName {
+		logx.Infof("重新打标签: %s -> %s", pullResult.ActualImageName, img.FullName)
+		if err := module.TagImage(ctx, e.dockerClient, pullResult.ActualImageName, img.FullName); err != nil {
+			logx.Errorf("重新打标签失败: %v", err)
+		}
+	}
 
 	// 获取新镜像ID并更新缓存
 	newInspect, _, err := e.dockerClient.ImageInspectWithRaw(ctx, img.FullName)

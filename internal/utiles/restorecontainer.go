@@ -3,14 +3,15 @@ package utiles
 import (
 	"context"
 	"encoding/json"
-	dockerBackend "github.com/docker/docker/api/types/backend"
-	"github.com/docker/docker/api/types/image"
-	"github.com/xcz1997/dockerCopilot/internal/svc"
-	"github.com/zeromicro/go-zero/core/logx"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	dockerBackend "github.com/docker/docker/api/types/backend"
+	"github.com/xcz1997/dockerCopilot/internal/module"
+	"github.com/xcz1997/dockerCopilot/internal/svc"
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 func RestoreContainer(ctx *svc.ServiceContext, filename string, taskID string) error {
@@ -55,22 +56,33 @@ func RestoreContainer(ctx *svc.ServiceContext, filename string, taskID string) e
 		oldProgress.DetailMsg = info
 		ctx.UpdateProgress(taskID, oldProgress)
 		ctx.DockerClient.NegotiateAPIVersion(context.TODO())
-		if err != nil {
-			backupList = append(backupList, "出现错误"+err.Error())
-			logx.Error("Failed to inspect container: %s", err)
-			return err
+
+		// 使用统一的镜像拉取方法（支持加速器和私有 Registry 认证）
+		imageName := containerInfo.Config.Image
+		pullOpts := module.PullImageOptions{
+			ImageName:      imageName,
+			UseAccelerator: true,
+			RegistryAuth:   module.GetPullAuthForImage(imageName),
 		}
-		reader, err := ctx.DockerClient.ImagePull(context.TODO(), containerInfo.Config.Image, image.PullOptions{})
+		reader, pullResult, err := module.PullImage(context.TODO(), ctx.DockerClient, pullOpts)
 		if err != nil {
-			backupList = append(backupList, containerInfo.Config.Image+"拉取镜像出现错误"+err.Error())
+			backupList = append(backupList, imageName+"拉取镜像出现错误"+err.Error())
 			logx.Errorf("Failed to pull image: %s", err)
 			continue
 		}
 		err = decodePullResp(reader, ctx, taskID)
 		if err != nil {
-			backupList = append(backupList, containerInfo.Config.Image+"拉取镜像出现错误"+err.Error())
+			backupList = append(backupList, imageName+"拉取镜像出现错误"+err.Error())
 			logx.Errorf("Failed to pull image: %s", err)
 			continue
+		}
+
+		// 如果使用了加速器，需要重新打标签
+		if pullResult.ActualImageName != imageName {
+			logx.Infof("重新打标签: %s -> %s", pullResult.ActualImageName, imageName)
+			if err := module.TagImage(context.TODO(), ctx.DockerClient, pullResult.ActualImageName, imageName); err != nil {
+				logx.Errorf("重新打标签失败: %v", err)
+			}
 		}
 		_, err = ctx.DockerClient.ContainerCreate(context.TODO(), containerInfo.Config, containerInfo.HostConfig, containerInfo.NetworkingConfig, nil, containerInfo.Name)
 		if err != nil {

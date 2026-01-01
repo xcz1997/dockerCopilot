@@ -72,6 +72,20 @@ export const useImagesStore = defineStore('images', () => {
     }
   }
 
+  async function updateTag(id, newTag) {
+    try {
+      const response = await api.images.updateTag(id, newTag)
+      if (response.code === 200) {
+        // 刷新镜像列表以获取新数据
+        await fetchImages()
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.msg }
+    } catch (e) {
+      return { success: false, message: e.message }
+    }
+  }
+
   return {
     images,
     loading,
@@ -79,6 +93,7 @@ export const useImagesStore = defineStore('images', () => {
     fetchImages,
     removeImage,
     pullImage,
-    updateSource
+    updateSource,
+    updateTag
   }
 })

@@ -127,6 +127,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: image.UpdateSourceHandler(serverCtx),
 			},
 			{
+				Method:  http.MethodPut,
+				Path:    "/image/:id/tag",
+				Handler: image.UpdateTagHandler(serverCtx),
+			},
+			{
 				Method:  http.MethodGet,
 				Path:    "/images",
 				Handler: image.ImagesListHandler(serverCtx),
