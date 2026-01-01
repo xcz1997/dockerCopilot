@@ -50,12 +50,35 @@ export const useImagesStore = defineStore('images', () => {
     }
   }
 
+  async function updateSource(id, sourceType, registryHost = '') {
+    try {
+      const response = await api.images.updateSource(id, sourceType, registryHost)
+      if (response.code === 200) {
+        // 更新本地状态
+        const image = images.value.find(img => img.id === id)
+        if (image) {
+          image.sourceType = sourceType
+          image.registryHost = registryHost
+          // 如果设为本地，清除更新标记
+          if (sourceType === 'local') {
+            image.haveUpdate = false
+          }
+        }
+        return { success: true }
+      }
+      return { success: false, message: response.msg }
+    } catch (e) {
+      return { success: false, message: e.message }
+    }
+  }
+
   return {
     images,
     loading,
     error,
     fetchImages,
     removeImage,
-    pullImage
+    pullImage,
+    updateSource
   }
 })

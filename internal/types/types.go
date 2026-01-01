@@ -64,6 +64,12 @@ type RemoveImageReq struct {
 	Force bool `form:"force,default=false"`
 }
 
+type UpdateImageSourceReq struct {
+	IdReq
+	SourceType   string `json:"sourceType"`             // remote, local, private
+	RegistryHost string `json:"registryHost,optional"`  // 私有 Registry 主机（当 sourceType=private 时使用）
+}
+
 type RenameContainerReq struct {
 	OldName string `json:"oldName"`
 	NewName string `json:"newName"`

@@ -306,6 +306,121 @@ func NewExecutor(dockerClient *client.Client, hubImageInfo *module.ImageUpdateDa
 	}
 }
 
+// isImageInUse 检查镜像是否被任何容器使用
+func (e *Executor) isImageInUse(ctx context.Context, imageID string) bool {
+	containers, err := e.dockerClient.ContainerList(ctx, container.ListOptions{All: true})
+	if err != nil {
+		logx.Errorf("获取容器列表失败: %v", err)
+		return true // 出错时保守处理，不删除
+	}
+	for _, c := range containers {
+		if c.ImageID == imageID {
+			return true
+		}
+	}
+	return false
+}
+
+// cascadeUpdateContainers 级联更新使用指定旧镜像的其他容器
+func (e *Executor) cascadeUpdateContainers(ctx context.Context, oldImageID string, newImageNameAndTag string, excludeContainerID string) {
+	containers, err := e.dockerClient.ContainerList(ctx, container.ListOptions{All: true})
+	if err != nil {
+		logx.Errorf("获取容器列表失败，跳过级联更新: %v", err)
+		return
+	}
+
+	// 找到使用旧镜像的其他容器
+	var containersToUpdate []struct {
+		ID   string
+		Name string
+	}
+	for _, c := range containers {
+		if c.ImageID == oldImageID && c.ID != excludeContainerID {
+			name := ""
+			if len(c.Names) > 0 {
+				name = strings.TrimPrefix(c.Names[0], "/")
+			}
+			if name != "" {
+				containersToUpdate = append(containersToUpdate, struct {
+					ID   string
+					Name string
+				}{ID: c.ID, Name: name})
+			}
+		}
+	}
+
+	if len(containersToUpdate) == 0 {
+		logx.Infof("没有其他容器使用旧镜像 %s", oldImageID[:12])
+		return
+	}
+
+	logx.Infof("发现 %d 个容器使用旧镜像，开始级联更新", len(containersToUpdate))
+
+	for _, c := range containersToUpdate {
+		logx.Infof("级联更新容器: %s (ID: %s)", c.Name, c.ID[:12])
+
+		// 获取容器详细信息
+		inspect, err := e.dockerClient.ContainerInspect(ctx, c.ID)
+		if err != nil {
+			logx.Errorf("获取容器 %s 信息失败: %v", c.Name, err)
+			continue
+		}
+
+		wasRunning := inspect.State.Running
+
+		// 停止容器
+		if wasRunning {
+			timeout := 30
+			if err := e.dockerClient.ContainerStop(ctx, c.ID, container.StopOptions{Timeout: &timeout}); err != nil {
+				logx.Errorf("停止容器 %s 失败: %v", c.Name, err)
+				continue
+			}
+		}
+
+		// 重命名旧容器
+		backupName := fmt.Sprintf("%s_backup_%d", c.Name, time.Now().Unix())
+		if err := e.dockerClient.ContainerRename(ctx, c.ID, backupName); err != nil {
+			logx.Errorf("重命名容器 %s 失败: %v", c.Name, err)
+			if wasRunning {
+				_ = e.dockerClient.ContainerStart(ctx, c.ID, container.StartOptions{})
+			}
+			continue
+		}
+
+		// 使用新镜像创建容器
+		inspect.Config.Hostname = ""
+		inspect.Config.Image = newImageNameAndTag
+
+		newContainer, err := e.dockerClient.ContainerCreate(ctx, inspect.Config, inspect.HostConfig, nil, nil, c.Name)
+		if err != nil {
+			logx.Errorf("创建容器 %s 失败: %v", c.Name, err)
+			_ = e.dockerClient.ContainerRename(ctx, c.ID, c.Name)
+			if wasRunning {
+				_ = e.dockerClient.ContainerStart(ctx, c.ID, container.StartOptions{})
+			}
+			continue
+		}
+
+		// 启动新容器
+		if wasRunning {
+			if err := e.dockerClient.ContainerStart(ctx, newContainer.ID, container.StartOptions{}); err != nil {
+				logx.Errorf("启动容器 %s 失败: %v", c.Name, err)
+				_ = e.dockerClient.ContainerRemove(ctx, newContainer.ID, container.RemoveOptions{})
+				_ = e.dockerClient.ContainerRename(ctx, c.ID, c.Name)
+				_ = e.dockerClient.ContainerStart(ctx, c.ID, container.StartOptions{})
+				continue
+			}
+		}
+
+		// 删除旧容器
+		if err := e.dockerClient.ContainerRemove(ctx, c.ID, container.RemoveOptions{}); err != nil {
+			logx.Errorf("删除旧容器 %s 失败: %v", backupName, err)
+		}
+
+		logx.Infof("容器 %s 级联更新成功", c.Name)
+	}
+}
+
 // getImageNameWithTag 获取带标签的镜像名称
 // 优先使用镜像的 RepoTags，避免使用摘要格式导致更新后标签丢失
 func (e *Executor) getImageNameWithTag(ctx context.Context, imageID string, fallbackImage string) string {
@@ -551,6 +666,24 @@ func (e *Executor) UpdateWithProgress(ctx context.Context, mc MatchedContainer, 
 	if err := e.dockerClient.ContainerRemove(ctx, mc.ID, container.RemoveOptions{}); err != nil {
 		logx.Errorf("删除旧容器失败: %v", err)
 		// 不影响结果
+	}
+
+	// 8. 级联更新使用同一旧镜像的其他容器，然后清理旧镜像
+	oldImageID := mc.ImageID
+	if oldImageID != "" && oldImageID != newInspect.ID {
+		reportProgress(92, "级联更新", "正在更新使用同一镜像的其他容器")
+		e.cascadeUpdateContainers(ctx, oldImageID, imageName, mc.ID)
+
+		reportProgress(98, "清理旧镜像", "正在清理旧镜像")
+		// 再次检查旧镜像是否还被使用（级联更新后应该没有了）
+		if !e.isImageInUse(ctx, oldImageID) {
+			logx.Infof("清理旧镜像: %s", oldImageID[:12])
+			_, err := e.dockerClient.ImageRemove(ctx, oldImageID, image.RemoveOptions{})
+			if err != nil {
+				// 删除旧镜像失败不影响更新结果，只记录日志
+				logx.Errorf("删除旧镜像失败: %v", err)
+			}
+		}
 	}
 
 	result.Success = true

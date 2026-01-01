@@ -103,6 +103,13 @@ func (i *ImageUpdateData) MarkAsUpdated(imageID string, imageName string) {
 		i.Data[imageName] = ImageCheckList{NeedUpdate: false}
 	}
 }
+
+// RemoveImage 从缓存中移除镜像（用于本地镜像排除）
+func (i *ImageUpdateData) RemoveImage(imageID string) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	delete(i.Data, imageID)
+}
 // IsSelfImage 判断是否为 DockerCopilot 自身镜像
 func IsSelfImage(imageName string) bool {
 	lowerName := strings.ToLower(imageName)
@@ -165,7 +172,23 @@ func (i *ImageUpdateData) CheckUpdate(imageList []types.Image) {
 }
 
 func (i *ImageUpdateData) checkSingleImage(image types.Image) {
-	token, err := GetToken(image, "")
+	// 先检查镜像元数据，是否已标记为 local（跳过检查）
+	meta, _ := model.GetImageMetadata(image.ID)
+	if meta != nil && meta.SourceType == model.SourceTypeLocal {
+		logx.Debugf("跳过本地镜像检查: %s:%s", image.ImageName, image.ImageTag)
+		return
+	}
+
+	// 如果是私有镜像，使用绑定的 Registry 认证
+	var registryAuth string
+	if meta != nil && meta.SourceType == model.SourceTypePrivate && meta.RegistryHost != "" {
+		registryAuth = findPrivateRegistryAuthByHost(meta.RegistryHost)
+		if registryAuth != "" {
+			logx.Infof("使用绑定的私有 Registry: %s", meta.RegistryHost)
+		}
+	}
+
+	token, err := GetToken(image, registryAuth)
 	if err != nil {
 		logx.Debugf("获取token失败或者无需获取token，继续尝试检查: %s", err.Error())
 	}
@@ -177,8 +200,8 @@ func (i *ImageUpdateData) checkSingleImage(image types.Image) {
 	remoteDigest, err := GetDigest(digestURL, token)
 	if err != nil {
 		errMsg := err.Error()
-		// 检查是否为 404 错误，仅 404 时降级为 local
-		if is404Error(errMsg) {
+		// 检查是否为 404 错误，仅 404 时降级为 local（但私有镜像不自动降级）
+		if is404Error(errMsg) && (meta == nil || meta.SourceType != model.SourceTypePrivate) {
 			logx.Infof("镜像 %s:%s 远程不存在 (404)，标记为本地镜像", image.ImageName, image.ImageTag)
 			updateImageMetadata(image, model.SourceTypeLocal, errMsg)
 		} else {

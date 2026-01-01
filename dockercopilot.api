@@ -82,6 +82,11 @@ type RemoveImageReq {
 	Force bool `form:"force,default=false"`
 }
 
+type UpdateImageSourceReq {
+	IdReq
+	SourceType string `json:"sourceType"` // remote, local
+}
+
 type ContainerUpdateReq {
 	IdReq
 	ImageNameAndTag string `form:"imageNameAndTag"`
@@ -238,6 +243,12 @@ service dockerCopilot {
 
 	@handler remove
 	delete /image/:id (RemoveImageReq) returns (Resp)
+
+	@handler updateSource
+	put /image/:id/source (UpdateImageSourceReq) returns (Resp)
+
+	@handler pull
+	post /image/:id/pull (IdReq) returns (Resp)
 }
 
 @server(

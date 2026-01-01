@@ -2,9 +2,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useImagesStore } from '@/stores/images'
 import { useToastStore } from '@/stores/toast'
+import api from '@/api'
 
 const imagesStore = useImagesStore()
 const toastStore = useToastStore()
+
+// 私有 Registry 列表
+const privateRegistries = ref([])
+const selectedRegistry = ref('')
 
 const searchQuery = ref('')
 const filterType = ref('all')
@@ -36,10 +41,12 @@ function getSortLabel() {
 }
 const showDeleteModal = ref(false)
 const showPullModal = ref(false)
+const showSourceModal = ref(false)
 const selectedImage = ref(null)
 const forceDelete = ref(false)
 const deletingIds = ref(new Set())
 const pullingIds = ref(new Set())
+const updatingSourceIds = ref(new Set())
 
 const filteredImages = computed(() => {
   let result = imagesStore.images
@@ -117,6 +124,20 @@ function getImageFullName(image) {
   return image.id?.substring(7, 19) || 'unknown'
 }
 
+function getSourceLabel(image) {
+  if (image.sourceType === 'local') return '本地'
+  if (image.sourceType === 'private') return '私有'
+  return '远程'
+}
+
+function getSourceTooltip(image) {
+  if (image.sourceType === 'local') return '本地镜像（不检查更新）- 点击切换'
+  if (image.sourceType === 'private') {
+    return `私有 Registry: ${image.registryHost || '未知'} - 点击切换`
+  }
+  return '远程镜像 - 点击切换'
+}
+
 function openDeleteModal(image) {
   selectedImage.value = image
   // 使用中的镜像默认勾选强制删除
@@ -146,6 +167,48 @@ async function handleDelete() {
 function openPullModal(image) {
   selectedImage.value = image
   showPullModal.value = true
+}
+
+async function openSourceModal(image) {
+  selectedImage.value = image
+  selectedRegistry.value = image.registryHost || ''
+  showSourceModal.value = true
+
+  // 加载私有 Registry 列表
+  try {
+    const response = await api.settings.getPrivateRegistries()
+    if (response.code === 200 && response.data?.registries) {
+      privateRegistries.value = response.data.registries
+    }
+  } catch (e) {
+    console.error('加载私有 Registry 失败:', e)
+  }
+}
+
+async function handleSourceChange(newSourceType, registryHost = '') {
+  if (!selectedImage.value) return
+
+  // 私有类型必须选择 Registry
+  if (newSourceType === 'private' && !registryHost) {
+    toastStore.error('请选择一个私有 Registry')
+    return
+  }
+
+  const id = selectedImage.value.id
+  updatingSourceIds.value.add(id)
+
+  try {
+    const result = await imagesStore.updateSource(id, newSourceType, registryHost)
+    if (result.success) {
+      showSourceModal.value = false
+      const typeLabels = { remote: '远程', local: '本地', private: '私有' }
+      toastStore.success(`镜像已标记为${typeLabels[newSourceType]}镜像`)
+    } else {
+      toastStore.error(result.message || '更新失败')
+    }
+  } finally {
+    updatingSourceIds.value.delete(id)
+  }
 }
 
 async function handlePull() {
@@ -385,17 +448,23 @@ onMounted(() => {
             <span v-if="image.haveUpdate" class="badge badge-warning text-xs whitespace-nowrap flex-shrink-0">
               有更新
             </span>
-            <!-- 来源标记 -->
-            <span
-              v-if="image.sourceType"
+            <!-- 来源标记（可点击切换） -->
+            <button
+              @click.stop="openSourceModal(image)"
+              :disabled="updatingSourceIds.has(image.id)"
               :class="[
-                'badge text-xs whitespace-nowrap flex-shrink-0',
-                image.sourceType === 'local' ? 'badge-secondary' : 'badge-info'
+                'badge text-xs whitespace-nowrap flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity',
+                image.sourceType === 'local' ? 'badge-secondary' :
+                image.sourceType === 'private' ? 'badge-purple' : 'badge-info'
               ]"
-              :title="image.sourceType === 'local' ? '本地镜像（远程不存在）' : '远程镜像'"
+              :title="getSourceTooltip(image)"
             >
-              {{ image.sourceType === 'local' ? '本地' : '远程' }}
-            </span>
+              <svg v-if="updatingSourceIds.has(image.id)" class="w-3 h-3 animate-spin mr-0.5" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              {{ getSourceLabel(image) }}
+            </button>
           </div>
 
           <!-- 详细信息 -->
@@ -532,6 +601,139 @@ onMounted(() => {
             </svg>
             {{ pullingIds.has(selectedImage?.id) ? '拉取中...' : '确认更新' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 来源切换弹窗 -->
+    <div v-if="showSourceModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+      <div class="card w-full max-w-md p-6 animate-scale-in" @click.stop>
+        <div class="flex items-center gap-3 mb-4">
+          <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+            <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">切换镜像来源</h3>
+        </div>
+
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+          选择镜像 <strong class="text-gray-900 dark:text-white">{{ getImageFullName(selectedImage) }}</strong> 的来源类型：
+        </p>
+
+        <div class="space-y-3 mb-6">
+          <!-- 远程选项 -->
+          <button
+            @click="handleSourceChange('remote')"
+            :disabled="updatingSourceIds.has(selectedImage?.id)"
+            :class="[
+              'w-full p-4 rounded-lg border-2 text-left transition-all flex items-start gap-3',
+              selectedImage?.sourceType === 'remote' || (!selectedImage?.sourceType)
+                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                : 'border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700'
+            ]"
+          >
+            <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex-shrink-0">
+              <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+              </svg>
+            </div>
+            <div>
+              <div class="font-medium text-gray-900 dark:text-white">远程镜像</div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">从 Docker Hub 或公共 Registry 检查更新</div>
+            </div>
+            <div v-if="selectedImage?.sourceType === 'remote' || (!selectedImage?.sourceType)" class="ml-auto flex-shrink-0">
+              <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              </svg>
+            </div>
+          </button>
+
+          <!-- 私有 Registry 选项 -->
+          <div
+            :class="[
+              'w-full p-4 rounded-lg border-2 transition-all',
+              selectedImage?.sourceType === 'private'
+                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                : 'border-gray-200 dark:border-gray-700'
+            ]"
+          >
+            <div class="flex items-start gap-3">
+              <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex-shrink-0">
+                <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <div class="flex-1">
+                <div class="font-medium text-gray-900 dark:text-white">私有 Registry</div>
+                <div class="text-sm text-gray-500 dark:text-gray-400 mb-2">使用已配置的私有 Registry 认证检查更新</div>
+
+                <!-- Registry 选择器 -->
+                <div v-if="privateRegistries.length > 0" class="space-y-2">
+                  <select
+                    v-model="selectedRegistry"
+                    class="input text-sm w-full"
+                    :disabled="updatingSourceIds.has(selectedImage?.id)"
+                  >
+                    <option value="">选择私有 Registry...</option>
+                    <option v-for="reg in privateRegistries" :key="reg.host" :value="reg.host">
+                      {{ reg.name || reg.host }}
+                    </option>
+                  </select>
+                  <button
+                    @click="handleSourceChange('private', selectedRegistry)"
+                    :disabled="updatingSourceIds.has(selectedImage?.id) || !selectedRegistry"
+                    class="btn btn-sm btn-primary w-full"
+                  >
+                    <svg v-if="updatingSourceIds.has(selectedImage?.id)" class="w-4 h-4 animate-spin mr-1" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    绑定到此 Registry
+                  </button>
+                </div>
+                <div v-else class="text-sm text-amber-600 dark:text-amber-400">
+                  暂无已配置的私有 Registry，请先在设置中添加
+                </div>
+              </div>
+              <div v-if="selectedImage?.sourceType === 'private'" class="flex-shrink-0">
+                <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- 本地选项 -->
+          <button
+            @click="handleSourceChange('local')"
+            :disabled="updatingSourceIds.has(selectedImage?.id)"
+            :class="[
+              'w-full p-4 rounded-lg border-2 text-left transition-all flex items-start gap-3',
+              selectedImage?.sourceType === 'local'
+                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                : 'border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700'
+            ]"
+          >
+            <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex-shrink-0">
+              <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+              </svg>
+            </div>
+            <div>
+              <div class="font-medium text-gray-900 dark:text-white">本地镜像</div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">不检查更新，适用于本地构建的镜像</div>
+            </div>
+            <div v-if="selectedImage?.sourceType === 'local'" class="ml-auto flex-shrink-0">
+              <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              </svg>
+            </div>
+          </button>
+        </div>
+
+        <div class="flex justify-end">
+          <button @click="showSourceModal = false" class="btn btn-secondary" :disabled="updatingSourceIds.has(selectedImage?.id)">关闭</button>
         </div>
       </div>
     </div>

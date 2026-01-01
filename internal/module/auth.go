@@ -239,14 +239,18 @@ func checkHost(host string) bool {
 
 // findPrivateRegistryAuth 根据镜像名查找私有 Registry 认证信息
 func findPrivateRegistryAuth(imageName string) string {
-	config, err := model.GetPrivateRegistriesConfig()
-	if err != nil || !config.Enabled || len(config.Registries) == 0 {
-		return ""
-	}
-
 	// 从镜像名中提取 Registry 地址
 	host := extractRegistryHost(imageName)
 	if host == "" {
+		return ""
+	}
+	return findPrivateRegistryAuthByHost(host)
+}
+
+// findPrivateRegistryAuthByHost 根据 Registry 主机名查找认证信息
+func findPrivateRegistryAuthByHost(host string) string {
+	config, err := model.GetPrivateRegistriesConfig()
+	if err != nil || !config.Enabled || len(config.Registries) == 0 {
 		return ""
 	}
 

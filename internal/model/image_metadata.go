@@ -7,8 +7,9 @@ import (
 
 // 镜像来源类型
 const (
-	SourceTypeRemote = "remote" // 远程镜像
-	SourceTypeLocal  = "local"  // 本地镜像
+	SourceTypeRemote  = "remote"  // 远程镜像（Docker Hub 或公共 Registry）
+	SourceTypeLocal   = "local"   // 本地镜像（不检查更新）
+	SourceTypePrivate = "private" // 私有 Registry 镜像
 )
 
 // ImageMetadata 镜像元数据

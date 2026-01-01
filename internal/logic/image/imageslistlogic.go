@@ -28,7 +28,8 @@ type Info struct {
 	InUsed         bool   `json:"inUsed"`
 	CreateTime     string `json:"createTime"`
 	HaveUpdate     bool   `json:"haveUpdate"`
-	SourceType     string `json:"sourceType,omitempty"`     // remote/local
+	SourceType     string `json:"sourceType,omitempty"`     // remote/local/private
+	RegistryHost   string `json:"registryHost,omitempty"`   // 私有 Registry 地址
 	LastCheckAt    string `json:"lastCheckAt,omitempty"`    // 最后检查时间
 	LastCheckError string `json:"lastCheckError,omitempty"` // 最后检查错误
 }
@@ -85,9 +86,10 @@ func (l *ImagesListLogic) ImagesList() (resp *types.Resp, err error) {
 		if hubInfo, ok := l.svcCtx.HubImageInfo.Data[v.ID]; ok {
 			imageInfo.HaveUpdate = hubInfo.NeedUpdate
 		}
-		// 获取镜像元数据（来源类型）
+		// 获取镜像元数据（来源类型、绑定的 Registry）
 		if meta, ok := metadataMap[v.ID]; ok {
 			imageInfo.SourceType = meta.SourceType
+			imageInfo.RegistryHost = meta.RegistryHost
 			if meta.LastCheckAt != nil {
 				imageInfo.LastCheckAt = meta.LastCheckAt.Format("2006-01-02 15:04:05")
 			}
