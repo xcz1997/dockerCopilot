@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 
+	"go/types"
+
 	"github.com/robfig/cron/v3"
 	"github.com/xcz1997/dockerCopilot/internal/config"
 	"github.com/xcz1997/dockerCopilot/internal/handler"
@@ -21,7 +23,6 @@ import (
 	"github.com/zeromicro/go-zero/rest/httpx"
 	"github.com/zeromicro/x/errors"
 	xhttp "github.com/zeromicro/x/http"
-	"go/types"
 )
 
 //go:embed front/*
@@ -231,15 +232,13 @@ func SetupLog(logDir string) error {
 	}
 
 	logConf := logx.LogConf{
-		Path:     logDir,
-		Level:    "info",
-		KeepDays: 7,
-		Compress: true,
-		Mode:     "file",
+		Level: "info",
+		Mode:  "console",
 	}
 	logx.MustSetup(logConf)
-	// 使用带过滤功能的 Writer，过滤高频 API 请求日志
-	filteredWriter := middleware.NewFilteredWriter(os.Stdout)
-	logx.AddWriter(logx.NewWriter(filteredWriter))
+
+	// 创建统一的过滤 Writer，同时输出到控制台和文件
+	unifiedWriter := middleware.NewUnifiedLogWriter(logDir, os.Stdout)
+	logx.SetWriter(logx.NewWriter(unifiedWriter))
 	return nil
 }
