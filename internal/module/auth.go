@@ -104,11 +104,10 @@ func GetBearerHeader(challenge string, imageRef ref.Named, registryAuth string) 
 	}
 
 	if registryAuth != "" {
-		logx.Info("私有镜像，无法获取是否有更新")
+		logx.Debugf("使用私有 Registry 认证获取 token")
 		r.Header.Add("Authorization", fmt.Sprintf("Basic %s", registryAuth))
-	} else {
-		logx.Info("No credentials found.")
 	}
+	// 公共镜像不需要认证，这是正常情况，不需要记录日志
 
 	var authResponse *http.Response
 	if authResponse, err = client.Do(r); err != nil {
