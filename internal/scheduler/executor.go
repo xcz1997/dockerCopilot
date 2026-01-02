@@ -18,11 +18,11 @@ import (
 
 // dockerPullProgress Docker 镜像拉取进度结构
 type dockerPullProgress struct {
-	Status         string                 `json:"status"`
-	ID             string                 `json:"id"`
-	Progress       string                 `json:"progress"`
-	ProgressDetail dockerProgressDetail   `json:"progressDetail"`
-	Error          string                 `json:"error,omitempty"`
+	Status         string               `json:"status"`
+	ID             string               `json:"id"`
+	Progress       string               `json:"progress"`
+	ProgressDetail dockerProgressDetail `json:"progressDetail"`
+	Error          string               `json:"error,omitempty"`
 }
 
 // dockerProgressDetail 进度详情
@@ -792,8 +792,26 @@ func (e *Executor) PullImageWithProgress(ctx context.Context, img MatchedImage, 
 		onProgress(5, "开始拉取", fmt.Sprintf("正在拉取镜像 %s", img.FullName))
 	}
 
-	// 记录旧镜像ID，用于后续级联更新和清理
+	// 获取拉取前的镜像 ID（用于后续级联更新和清理）
+	// 注意：img.ID 可能已经是新镜像（如果之前已拉取但容器未更新）
+	// 需要找到实际使用该镜像名的容器所引用的镜像 ID
 	oldImageID := img.ID
+
+	// 查找使用该镜像名的容器，获取它们实际使用的镜像 ID
+	containers, err := e.dockerClient.ContainerList(ctx, container.ListOptions{All: true})
+	if err == nil {
+		for _, c := range containers {
+			// 检查容器使用的镜像是否匹配（通过镜像名）
+			if c.Image == img.FullName || c.Image == img.Name || strings.HasPrefix(c.Image, img.Name+":") {
+				// 使用容器实际引用的镜像 ID
+				if c.ImageID != "" && c.ImageID != img.ID {
+					logx.Debugf("容器 %s 使用旧镜像 %s，而非当前镜像 %s", c.Names, c.ImageID[:12], img.ID[:12])
+					oldImageID = c.ImageID
+					break
+				}
+			}
+		}
+	}
 
 	// 使用统一的镜像拉取方法（支持加速器和私有 Registry 认证）
 	pullOpts := module.PullImageOptions{
