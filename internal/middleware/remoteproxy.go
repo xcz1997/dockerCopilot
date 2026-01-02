@@ -30,9 +30,9 @@ func NewRemoteProxyMiddleware(svcCtx *svc.ServiceContext) *RemoteProxyMiddleware
 
 // excludedPaths 不需要代理的路径前缀
 var excludedPaths = []string{
-	"/api/auth",            // 认证
-	"/api/environment",     // 环境管理
-	"/api/environments",    // 环境列表
+	"/api/auth",         // 认证
+	"/api/environment",  // 环境管理
+	"/api/environments", // 环境列表
 }
 
 // shouldProxy 判断请求是否需要代理
@@ -106,7 +106,7 @@ func (m *RemoteProxyMiddleware) proxyRequest(w http.ResponseWriter, r *http.Requ
 		path = path + "?" + r.URL.RawQuery
 	}
 
-	logx.Infof("代理请求到远程环境: %s %s -> %s", r.Method, path, env.URL)
+	logx.Debugf("代理请求到远程环境: %s %s -> %s", r.Method, path, env.URL)
 
 	// 发送代理请求
 	data, err := client.ProxyRequest(r.Method, path, body)
