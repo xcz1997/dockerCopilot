@@ -215,9 +215,10 @@ func UpdateContainer(serviceContext *svc.ServiceContext, id string, name string,
 				}
 			}
 
-			// 标记新镜像为已更新（清除 haveUpdate 状态）
+			// 标记新镜像为已更新（清除 haveUpdate 状态），并保存远程 digest
 			if serviceContext.HubImageInfo != nil {
-				serviceContext.HubImageInfo.MarkAsUpdated(newImageInspect.ID, imageNameAndTag)
+				remoteDigest := serviceContext.HubImageInfo.GetRemoteDigest(imageNameAndTag)
+				serviceContext.HubImageInfo.MarkAsUpdatedWithDigest(newImageInspect.ID, imageNameAndTag, remoteDigest)
 				logx.Infof("标记镜像 %s 为已更新", imageNameAndTag)
 			}
 		}

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	_ "modernc.org/sqlite"
 	"github.com/zeromicro/go-zero/core/logx"
+	_ "modernc.org/sqlite"
 )
 
 var (
@@ -225,6 +225,8 @@ func migrate(db *sql.DB) error {
 	}
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_image_metadata_image_id ON image_metadata(image_id)`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_image_metadata_source_type ON image_metadata(source_type)`)
+	// 添加 last_known_digest 字段（存储已确认更新的远程 digest，解决加速器拉取后 RepoDigests 不更新的问题）
+	_, _ = db.Exec(`ALTER TABLE image_metadata ADD COLUMN last_known_digest TEXT DEFAULT ''`)
 
 	// 环境表
 	_, err = db.Exec(`

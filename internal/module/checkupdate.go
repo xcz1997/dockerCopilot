@@ -18,7 +18,8 @@ import (
 
 // ImageCheckList 检查更新处理后的镜像列表
 type ImageCheckList struct {
-	NeedUpdate bool
+	NeedUpdate   bool
+	RemoteDigest string // 远程 digest，用于更新成功后保存
 }
 
 type ImageUpdateData struct {
@@ -102,6 +103,52 @@ func (i *ImageUpdateData) MarkAsUpdated(imageID string, imageName string) {
 	if imageName != "" {
 		i.Data[imageName] = ImageCheckList{NeedUpdate: false}
 	}
+}
+
+// MarkAsUpdatedWithDigest 标记镜像为已更新，并保存远程 digest 到数据库
+// 这解决了通过加速器拉取镜像后 RepoDigests 不更新的问题
+func (i *ImageUpdateData) MarkAsUpdatedWithDigest(imageID string, imageName string, remoteDigest string) {
+	// 先更新内存缓存
+	i.MarkAsUpdated(imageID, imageName)
+
+	// 保存远程 digest 到数据库
+	if remoteDigest != "" && imageName != "" {
+		// 解析镜像名称和标签
+		name, tag := parseImageNameAndTag(imageName)
+		if name != "" && tag != "" {
+			if err := model.UpdateImageKnownDigest(name, tag, remoteDigest); err != nil {
+				logx.Errorf("保存镜像 %s 的已知 digest 失败: %v", imageName, err)
+			} else {
+				logx.Debugf("已保存镜像 %s 的已知 digest: %s", imageName, remoteDigest[:12])
+			}
+		}
+	}
+}
+
+// GetRemoteDigest 获取镜像的远程 digest（从缓存中查询）
+func (i *ImageUpdateData) GetRemoteDigest(imageName string) string {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	if result, ok := i.Data[imageName]; ok {
+		return result.RemoteDigest
+	}
+	return ""
+}
+
+// parseImageNameAndTag 解析镜像名称和标签
+func parseImageNameAndTag(fullName string) (name, tag string) {
+	// 处理带有 registry 前缀的情况，如 docker.io/library/nginx:latest
+	lastColon := strings.LastIndex(fullName, ":")
+	if lastColon == -1 {
+		return fullName, "latest"
+	}
+	// 检查冒号后面是否是端口号（registry:port/image:tag 格式）
+	afterColon := fullName[lastColon+1:]
+	if strings.Contains(afterColon, "/") {
+		// 冒号后面包含 /，说明这个冒号是 registry 端口
+		return fullName, "latest"
+	}
+	return fullName[:lastColon], afterColon
 }
 
 // RemoveImage 从缓存中移除镜像（用于本地镜像排除）
@@ -242,13 +289,23 @@ func (i *ImageUpdateData) checkSingleImage(image types.Image) {
 		}
 	}
 
+	// 如果本地 RepoDigests 与远程不匹配，检查数据库中记录的已知 digest
+	// 这解决了通过加速器拉取镜像后 RepoDigests 不更新的问题
+	if needUpdate && meta != nil && meta.LastKnownDigest != "" {
+		if meta.LastKnownDigest == remoteDigest {
+			logx.Debugf("%s:%s 已是最新版本 (通过 LastKnownDigest 确认)", image.ImageName, image.ImageTag)
+			needUpdate = false
+		}
+	}
+
 	if needUpdate && localDigestForLog != "" && remoteDigest != "" {
 		logx.Infof("%s:%s 需要更新 (本地: %s, 远程: %s)", image.ImageName, image.ImageTag, localDigestForLog[:12], remoteDigest[:12])
 	}
-	// 使用线程安全的方法设置结果
-	i.setImageCheck(image.ID, ImageCheckList{NeedUpdate: needUpdate})
+	// 使用线程安全的方法设置结果，同时保存远程 digest
+	checkResult := ImageCheckList{NeedUpdate: needUpdate, RemoteDigest: remoteDigest}
+	i.setImageCheck(image.ID, checkResult)
 	// 同时按镜像名称存储，方便容器通过镜像名查找
-	i.setImageCheckByName(image.ImageName, image.ImageTag, ImageCheckList{NeedUpdate: needUpdate})
+	i.setImageCheckByName(image.ImageName, image.ImageTag, checkResult)
 	// 远程检查成功，更新元数据标记为 remote
 	updateImageMetadata(image, model.SourceTypeRemote, "")
 }

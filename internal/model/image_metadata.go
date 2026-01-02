@@ -14,23 +14,24 @@ const (
 
 // ImageMetadata 镜像元数据
 type ImageMetadata struct {
-	ID             int64      `json:"id"`
-	ImageID        string     `json:"imageId"`
-	ImageName      string     `json:"imageName"`
-	ImageTag       string     `json:"imageTag"`
-	SourceType     string     `json:"sourceType"`
-	RegistryHost   string     `json:"registryHost,omitempty"`
-	LastCheckAt    *time.Time `json:"lastCheckAt,omitempty"`
-	LastCheckError string     `json:"lastCheckError,omitempty"`
-	CreatedAt      time.Time  `json:"createdAt"`
-	UpdatedAt      time.Time  `json:"updatedAt"`
+	ID              int64      `json:"id"`
+	ImageID         string     `json:"imageId"`
+	ImageName       string     `json:"imageName"`
+	ImageTag        string     `json:"imageTag"`
+	SourceType      string     `json:"sourceType"`
+	RegistryHost    string     `json:"registryHost,omitempty"`
+	LastCheckAt     *time.Time `json:"lastCheckAt,omitempty"`
+	LastCheckError  string     `json:"lastCheckError,omitempty"`
+	LastKnownDigest string     `json:"lastKnownDigest,omitempty"` // 已确认更新的远程 digest
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
 }
 
 // GetImageMetadata 根据 ImageID 获取镜像元数据
 func GetImageMetadata(imageID string) (*ImageMetadata, error) {
 	row := db.QueryRow(`
 		SELECT id, image_id, image_name, image_tag, source_type, registry_host,
-		       last_check_at, last_check_error, created_at, updated_at
+		       last_check_at, last_check_error, last_known_digest, created_at, updated_at
 		FROM image_metadata WHERE image_id = ?
 	`, imageID)
 
@@ -41,7 +42,7 @@ func GetImageMetadata(imageID string) (*ImageMetadata, error) {
 func GetImageMetadataByName(imageName, imageTag string) (*ImageMetadata, error) {
 	row := db.QueryRow(`
 		SELECT id, image_id, image_name, image_tag, source_type, registry_host,
-		       last_check_at, last_check_error, created_at, updated_at
+		       last_check_at, last_check_error, last_known_digest, created_at, updated_at
 		FROM image_metadata WHERE image_name = ? AND image_tag = ?
 	`, imageName, imageTag)
 
@@ -52,8 +53,8 @@ func GetImageMetadataByName(imageName, imageTag string) (*ImageMetadata, error) 
 func UpsertImageMetadata(meta *ImageMetadata) error {
 	now := time.Now()
 	_, err := db.Exec(`
-		INSERT INTO image_metadata (image_id, image_name, image_tag, source_type, registry_host, last_check_at, last_check_error, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO image_metadata (image_id, image_name, image_tag, source_type, registry_host, last_check_at, last_check_error, last_known_digest, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(image_id) DO UPDATE SET
 			image_name = excluded.image_name,
 			image_tag = excluded.image_tag,
@@ -61,8 +62,9 @@ func UpsertImageMetadata(meta *ImageMetadata) error {
 			registry_host = excluded.registry_host,
 			last_check_at = excluded.last_check_at,
 			last_check_error = excluded.last_check_error,
+			last_known_digest = CASE WHEN excluded.last_known_digest != '' THEN excluded.last_known_digest ELSE image_metadata.last_known_digest END,
 			updated_at = excluded.updated_at
-	`, meta.ImageID, meta.ImageName, meta.ImageTag, meta.SourceType, meta.RegistryHost, meta.LastCheckAt, meta.LastCheckError, now)
+	`, meta.ImageID, meta.ImageName, meta.ImageTag, meta.SourceType, meta.RegistryHost, meta.LastCheckAt, meta.LastCheckError, meta.LastKnownDigest, now)
 	return err
 }
 
@@ -77,11 +79,22 @@ func UpdateImageSourceType(imageID string, sourceType string, checkError string)
 	return err
 }
 
+// UpdateImageKnownDigest 更新镜像的已知 digest（在镜像更新成功后调用）
+func UpdateImageKnownDigest(imageName, imageTag, digest string) error {
+	now := time.Now()
+	_, err := db.Exec(`
+		UPDATE image_metadata
+		SET last_known_digest = ?, updated_at = ?
+		WHERE image_name = ? AND image_tag = ?
+	`, digest, now, imageName, imageTag)
+	return err
+}
+
 // GetAllImageMetadata 获取所有镜像元数据
 func GetAllImageMetadata() ([]ImageMetadata, error) {
 	rows, err := db.Query(`
 		SELECT id, image_id, image_name, image_tag, source_type, registry_host,
-		       last_check_at, last_check_error, created_at, updated_at
+		       last_check_at, last_check_error, last_known_digest, created_at, updated_at
 		FROM image_metadata ORDER BY updated_at DESC
 	`)
 	if err != nil {
@@ -95,11 +108,12 @@ func GetAllImageMetadata() ([]ImageMetadata, error) {
 		var registryHost sql.NullString
 		var lastCheckAt sql.NullTime
 		var lastCheckError sql.NullString
+		var lastKnownDigest sql.NullString
 
 		err := rows.Scan(
 			&meta.ID, &meta.ImageID, &meta.ImageName, &meta.ImageTag,
 			&meta.SourceType, &registryHost, &lastCheckAt, &lastCheckError,
-			&meta.CreatedAt, &meta.UpdatedAt,
+			&lastKnownDigest, &meta.CreatedAt, &meta.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -110,6 +124,7 @@ func GetAllImageMetadata() ([]ImageMetadata, error) {
 			meta.LastCheckAt = &lastCheckAt.Time
 		}
 		meta.LastCheckError = lastCheckError.String
+		meta.LastKnownDigest = lastKnownDigest.String
 
 		results = append(results, meta)
 	}
@@ -143,11 +158,12 @@ func scanImageMetadata(row *sql.Row) (*ImageMetadata, error) {
 	var registryHost sql.NullString
 	var lastCheckAt sql.NullTime
 	var lastCheckError sql.NullString
+	var lastKnownDigest sql.NullString
 
 	err := row.Scan(
 		&meta.ID, &meta.ImageID, &meta.ImageName, &meta.ImageTag,
 		&meta.SourceType, &registryHost, &lastCheckAt, &lastCheckError,
-		&meta.CreatedAt, &meta.UpdatedAt,
+		&lastKnownDigest, &meta.CreatedAt, &meta.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -158,6 +174,7 @@ func scanImageMetadata(row *sql.Row) (*ImageMetadata, error) {
 		meta.LastCheckAt = &lastCheckAt.Time
 	}
 	meta.LastCheckError = lastCheckError.String
+	meta.LastKnownDigest = lastKnownDigest.String
 
 	return &meta, nil
 }

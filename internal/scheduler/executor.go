@@ -718,9 +718,10 @@ func (e *Executor) UpdateWithProgress(ctx context.Context, mc MatchedContainer, 
 	result.NewImage = newInspect.ID
 	result.Message = "更新成功"
 
-	// 更新缓存：将新镜像标记为不需要更新
+	// 更新缓存：将新镜像标记为不需要更新，并保存远程 digest
 	if e.hubImageInfo != nil {
-		e.hubImageInfo.MarkAsUpdated(newInspect.ID, imageName)
+		remoteDigest := e.hubImageInfo.GetRemoteDigest(imageName)
+		e.hubImageInfo.MarkAsUpdatedWithDigest(newInspect.ID, imageName, remoteDigest)
 		logx.Infof("已更新镜像缓存: %s (ID: %s)", imageName, newInspect.ID[:12])
 	}
 
@@ -866,9 +867,11 @@ func (e *Executor) PullImageWithProgress(ctx context.Context, img MatchedImage, 
 		}
 	}
 
-	// 更新缓存
+	// 更新缓存，并保存远程 digest 到数据库
 	if e.hubImageInfo != nil {
-		e.hubImageInfo.MarkAsUpdated(newInspect.ID, img.FullName)
+		// 获取之前检查时保存的远程 digest
+		remoteDigest := e.hubImageInfo.GetRemoteDigest(img.FullName)
+		e.hubImageInfo.MarkAsUpdatedWithDigest(newInspect.ID, img.FullName, remoteDigest)
 		logx.Infof("已更新镜像缓存: %s (ID: %s)", img.FullName, newInspect.ID[:12])
 	}
 
