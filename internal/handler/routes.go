@@ -191,6 +191,29 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		rest.WithTimeout(0), // SSE 长连接不设超时
 	)
 
+	// 环境日志 SSE 路由
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/environment/:id/logs",
+				Handler: progress.EnvironmentLogsHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/environment/self/logs",
+				Handler: progress.SelfLogsHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/environment/self/container",
+				Handler: progress.EnvironmentSelfContainerHandler(serverCtx),
+			},
+		},
+		rest.WithPrefix("/api"),
+		rest.WithTimeout(0),
+	)
+
 	server.AddRoutes(
 		[]rest.Route{
 			{

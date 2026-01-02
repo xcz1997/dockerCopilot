@@ -42,6 +42,12 @@ type ContainerLogsReq struct {
 	Tail  string `form:"tail,default=100"`
 }
 
+type EnvironmentLogsReq struct {
+	Id    int64  `path:"id"`
+	Token string `form:"token,optional"`
+	Tail  string `form:"tail,default=100"`
+}
+
 type IdReq struct {
 	Id string `path:"id"`
 }

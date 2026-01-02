@@ -193,6 +193,14 @@
               </svg>
             </button>
             <button
+              @click="openLogModal(env)"
+              class="btn btn-secondary btn-sm btn-icon"
+              title="查看日志">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+              </svg>
+            </button>
+            <button
               v-if="!env.isDefault"
               @click="handleSetDefault(env.id)"
               :disabled="operatingIds.has(env.id)"
@@ -344,6 +352,14 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- 日志弹窗 -->
+    <EnvironmentLogModal
+      :visible="showLogModal"
+      :environment-id="selectedEnvForLog?.id || ''"
+      :environment-name="selectedEnvForLog?.name || ''"
+      @close="showLogModal = false"
+    />
   </div>
 </template>
 
@@ -353,6 +369,7 @@ import { useRouter } from 'vue-router'
 import { useEnvironmentsStore } from '@/stores/environments'
 import { useToastStore } from '@/stores/toast'
 import { useConfirmStore } from '@/stores/confirm'
+import EnvironmentLogModal from '@/components/EnvironmentLogModal.vue'
 import api from '@/api'
 
 // 图标 SVG 路径定义
@@ -446,7 +463,9 @@ function getSortLabel() {
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const showIconPicker = ref(false)
+const showLogModal = ref(false)
 const editingEnv = ref(null)
+const selectedEnvForLog = ref(null)
 const formData = ref({
   name: '',
   description: '',
@@ -618,6 +637,12 @@ async function handleSetDefault(id) {
   } finally {
     operatingIds.value.delete(id)
   }
+}
+
+// 打开日志弹窗
+function openLogModal(env) {
+  selectedEnvForLog.value = env
+  showLogModal.value = true
 }
 
 // 删除环境
