@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 	"github.com/xcz1997/dockerCopilot/internal/types"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -62,13 +63,29 @@ func (l *SystemRestartLogic) SystemRestart() (resp *types.Resp, err error) {
 
 	logx.Infof("准备重启服务，容器 ID: %s", containerID)
 
-	// 异步执行重启，确保响应能返回给客户端
+	// 异步执行重启，使用独立的 Docker client 避免 context canceled
 	go func() {
-		// 等待 1 秒，确保响应已发送
+		// 等待响应发送
 		time.Sleep(time.Second)
 
+		// 创建独立的 Docker client，避免主程序关闭时连接被断开
+		dockerHost := os.Getenv("DOCKER_HOST")
+		if dockerHost == "" {
+			dockerHost = "unix:///var/run/docker.sock"
+		}
+
+		cli, err := client.NewClientWithOpts(
+			client.WithHost(dockerHost),
+			client.WithAPIVersionNegotiation(),
+		)
+		if err != nil {
+			logx.Errorf("创建 Docker client 失败: %v", err)
+			return
+		}
+		defer cli.Close()
+
 		timeout := 10
-		err := l.svcCtx.DockerClient.ContainerRestart(context.Background(), containerID, container.StopOptions{
+		err = cli.ContainerRestart(context.Background(), containerID, container.StopOptions{
 			Timeout: &timeout,
 		})
 		if err != nil {
