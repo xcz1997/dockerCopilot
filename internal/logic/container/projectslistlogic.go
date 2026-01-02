@@ -122,11 +122,22 @@ func (l *ProjectsListLogic) ProjectsList() (resp *types.Resp, err error) {
 			}
 		}
 
-		// 检查是否有更新（通过 ImageID 查找）
+		// 检查是否有更新
 		haveUpdate := false
 		if l.svcCtx.HubImageInfo != nil && l.svcCtx.HubImageInfo.Data != nil {
+			// 优先通过 ImageID 查找
 			if info, ok := l.svcCtx.HubImageInfo.Data[c.ImageID]; ok {
 				haveUpdate = info.NeedUpdate
+			} else {
+				// 如果 ImageID 没找到，尝试通过镜像名称查找
+				// 这种情况发生在：容器使用旧镜像，但新镜像已被拉取
+				imageName := c.Image
+				if mappedName, ok := imageMap[c.ImageID]; ok {
+					imageName = mappedName
+				}
+				if info, ok := l.svcCtx.HubImageInfo.Data[imageName]; ok {
+					haveUpdate = info.NeedUpdate
+				}
 			}
 		}
 

@@ -350,7 +350,7 @@ function closeSidebar() {
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
             <keep-alive :max="5">
-              <component :is="Component" :key="refreshKey" />
+              <component :is="Component" :key="`${route.path}-${refreshKey}`" />
             </keep-alive>
           </transition>
         </router-view>

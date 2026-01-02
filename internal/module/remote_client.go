@@ -144,9 +144,34 @@ func (c *RemoteClient) doRequest(method, path string, body interface{}) (*Remote
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
 
+	// 检查 HTTP 状态码
+	if resp.StatusCode >= 400 {
+		// 截取响应内容用于调试（最多 200 字符）
+		preview := string(respBody)
+		if len(preview) > 200 {
+			preview = preview[:200] + "..."
+		}
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, preview)
+	}
+
+	// 检查是否返回了 HTML（非 JSON 响应）
+	contentType := resp.Header.Get("Content-Type")
+	if strings.Contains(contentType, "text/html") || (len(respBody) > 0 && respBody[0] == '<') {
+		preview := string(respBody)
+		if len(preview) > 200 {
+			preview = preview[:200] + "..."
+		}
+		return nil, fmt.Errorf("远程服务返回 HTML 而非 JSON (可能是认证失效或URL错误): %s", preview)
+	}
+
 	var result RemoteResponse
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("解析响应失败: %w", err)
+		// 提供更详细的错误信息
+		preview := string(respBody)
+		if len(preview) > 200 {
+			preview = preview[:200] + "..."
+		}
+		return nil, fmt.Errorf("解析响应失败: %w, 响应内容: %s", err, preview)
 	}
 
 	// 如果是 401 错误，尝试重新认证

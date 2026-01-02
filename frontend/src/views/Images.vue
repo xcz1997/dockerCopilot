@@ -1,11 +1,23 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useImagesStore } from '@/stores/images'
 import { useToastStore } from '@/stores/toast'
 import api from '@/api'
 
 const imagesStore = useImagesStore()
 const toastStore = useToastStore()
+
+// 智能刷新：记录上次获取时间，避免频繁重复请求
+let lastFetchTime = 0
+const REFRESH_INTERVAL = 5000 // 5秒内不重复刷新
+
+async function smartFetch() {
+  const now = Date.now()
+  if (now - lastFetchTime > REFRESH_INTERVAL) {
+    lastFetchTime = now
+    await imagesStore.fetchImages()
+  }
+}
 
 // 私有 Registry 列表
 const privateRegistries = ref([])
@@ -280,7 +292,11 @@ async function handleTagChange() {
 }
 
 onMounted(() => {
-  imagesStore.fetchImages()
+  smartFetch()
+})
+
+onActivated(() => {
+  smartFetch()
 })
 </script>
 

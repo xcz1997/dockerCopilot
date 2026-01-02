@@ -170,16 +170,18 @@ export const useEnvironmentsStore = defineStore('environments', () => {
     try {
       const response = await api.environments.refresh(id)
       if (response.code === 200) {
-        // 更新本地数据
+        // 更新本地数据（无论成功还是失败都更新，因为状态可能已改变）
         const index = environments.value.findIndex(e => e.id === id)
         if (index !== -1 && response.data) {
           environments.value[index] = response.data
         }
         // 如果是当前环境，也更新
-        if (currentEnvironment.value && currentEnvironment.value.id === id) {
+        if (currentEnvironment.value && currentEnvironment.value.id === id && response.data) {
           currentEnvironment.value = response.data
         }
-        return { success: true, data: response.data }
+        // 检查是否刷新成功（msg 中不包含"失败"）
+        const isSuccess = !response.msg || !response.msg.includes('失败')
+        return { success: isSuccess, data: response.data, message: response.msg }
       }
       return { success: false, message: response.msg }
     } catch (e) {

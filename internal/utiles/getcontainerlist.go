@@ -29,9 +29,19 @@ func GetContainerList(ctx *svc.ServiceContext) ([]MyType.Container, error) {
 
 func CheckImageUpdate(ctx *svc.ServiceContext, containerListData []MyType.Container) []MyType.Container {
 	for i, v := range containerListData {
-		if _, ok := ctx.HubImageInfo.Data[v.ImageID]; ok {
-			if ctx.HubImageInfo.Data[v.ImageID].NeedUpdate {
+		// 优先通过 ImageID 查找
+		if info, ok := ctx.HubImageInfo.Data[v.ImageID]; ok {
+			if info.NeedUpdate {
 				containerListData[i].Update = true
+			}
+		} else {
+			// 如果 ImageID 没找到，尝试通过镜像名称查找
+			// 这种情况发生在：容器使用旧镜像，但新镜像已被拉取
+			imageName := v.Image
+			if info, ok := ctx.HubImageInfo.Data[imageName]; ok {
+				if info.NeedUpdate {
+					containerListData[i].Update = true
+				}
 			}
 		}
 	}

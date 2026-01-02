@@ -88,9 +88,11 @@ func (l *ListTasksLogic) ListTasks(statusFilter string) (resp *types.Resp, err e
 			subTasks := make([]map[string]interface{}, 0, len(task.SubTasks))
 			for _, st := range task.SubTasks {
 				subTask := map[string]interface{}{
-					"name":    st.Name,
-					"status":  st.Status,
-					"message": st.Message,
+					"name":       st.Name,
+					"status":     st.Status,
+					"message":    st.Message,
+					"detailMsg":  st.DetailMsg,
+					"percentage": st.Percentage,
 				}
 				if st.StartedAt != nil {
 					subTask["startedAt"] = st.StartedAt.Format("2006-01-02 15:04:05")

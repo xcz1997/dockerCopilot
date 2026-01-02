@@ -54,10 +54,15 @@ func (l *EnvironmentRefreshLogic) EnvironmentRefresh(req *types.EnvironmentIdReq
 	} else {
 		// 远程环境刷新统计
 		if err := module.RefreshEnvironmentStats(env); err != nil {
-			resp.Code = 500
-			resp.Msg = "刷新远程环境统计失败: " + err.Error()
-			resp.Data = map[string]interface{}{}
-			return resp, err
+			// 即使刷新失败，也返回当前环境数据（带错误状态）
+			// 不要返回 err，否则 go-zero 会返回 HTTP 500 而不是 JSON 响应
+			logx.Errorf("刷新远程环境统计失败: %v", err)
+			// 重新获取环境（包含已更新的错误状态）
+			env, _ = model.GetEnvironmentByID(req.Id)
+			resp.Code = 200 // 返回 200 但带有错误状态的环境数据
+			resp.Msg = "刷新失败: " + err.Error()
+			resp.Data = env
+			return resp, nil
 		}
 	}
 

@@ -786,11 +786,14 @@ func (e *Executor) CheckImageUpdate(ctx context.Context, img MatchedImage) (bool
 	return hasUpdate, nil
 }
 
-// PullImageWithProgress 拉取镜像（带进度回调）
+// PullImageWithProgress 拉取镜像并级联重建使用该镜像的容器（带进度回调）
 func (e *Executor) PullImageWithProgress(ctx context.Context, img MatchedImage, onProgress ProgressCallback) error {
 	if onProgress != nil {
-		onProgress(10, "开始拉取", fmt.Sprintf("正在拉取镜像 %s", img.FullName))
+		onProgress(5, "开始拉取", fmt.Sprintf("正在拉取镜像 %s", img.FullName))
 	}
+
+	// 记录旧镜像ID，用于后续级联更新和清理
+	oldImageID := img.ID
 
 	// 使用统一的镜像拉取方法（支持加速器和私有 Registry 认证）
 	pullOpts := module.PullImageOptions{
@@ -804,8 +807,8 @@ func (e *Executor) PullImageWithProgress(ctx context.Context, img MatchedImage, 
 	}
 	defer pullOut.Close()
 
-	// 解析镜像拉取进度（拉取过程在10%-90%之间）
-	parsePullProgress(pullOut, 10, 90, onProgress)
+	// 解析镜像拉取进度（拉取过程在5%-50%之间）
+	parsePullProgress(pullOut, 5, 50, onProgress)
 
 	// 如果使用了加速器，需要重新打标签
 	if pullResult.ActualImageName != img.FullName {
@@ -815,16 +818,45 @@ func (e *Executor) PullImageWithProgress(ctx context.Context, img MatchedImage, 
 		}
 	}
 
-	// 获取新镜像ID并更新缓存
+	// 获取新镜像ID
 	newInspect, _, err := e.dockerClient.ImageInspectWithRaw(ctx, img.FullName)
-	if err == nil && e.hubImageInfo != nil {
+	if err != nil {
+		return fmt.Errorf("获取新镜像信息失败: %w", err)
+	}
+
+	// 如果镜像确实更新了（ID 不同），级联重建使用该镜像的容器
+	if oldImageID != newInspect.ID {
+		if onProgress != nil {
+			onProgress(55, "级联重建容器", "正在重建使用该镜像的容器")
+		}
+		logx.Infof("镜像[%s]已更新，开始级联重建容器 (旧ID: %s, 新ID: %s)",
+			img.FullName, oldImageID[:12], newInspect.ID[:12])
+
+		// 级联更新使用旧镜像的容器
+		e.cascadeUpdateContainers(ctx, oldImageID, img.FullName, "")
+
+		// 清理旧镜像
+		if onProgress != nil {
+			onProgress(90, "清理旧镜像", "正在清理旧镜像")
+		}
+		if !e.isImageInUse(ctx, oldImageID) {
+			logx.Infof("清理旧镜像: %s", oldImageID[:12])
+			_, err := e.dockerClient.ImageRemove(ctx, oldImageID, image.RemoveOptions{})
+			if err != nil {
+				logx.Errorf("删除旧镜像失败: %v", err)
+			}
+		}
+	}
+
+	// 更新缓存
+	if e.hubImageInfo != nil {
 		e.hubImageInfo.MarkAsUpdated(newInspect.ID, img.FullName)
 		logx.Infof("已更新镜像缓存: %s (ID: %s)", img.FullName, newInspect.ID[:12])
 	}
 
 	if onProgress != nil {
-		onProgress(100, "拉取完成", "镜像更新成功")
+		onProgress(100, "更新完成", "镜像和容器更新成功")
 	}
-	logx.Infof("镜像[%s]拉取完成", img.FullName)
+	logx.Infof("镜像[%s]更新完成", img.FullName)
 	return nil
 }
