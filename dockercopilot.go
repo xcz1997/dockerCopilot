@@ -43,6 +43,7 @@ func main() {
 		os.Exit(1)
 	}
 	logx.SetLevel(logx.InfoLevel)
+	logx.DisableStat() // 禁用请求统计日志
 
 	flag.Parse()
 	var c config.Config

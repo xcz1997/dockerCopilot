@@ -93,8 +93,11 @@ func (m *Matcher) GetMatchedContainers(ctx context.Context, groupID int64) ([]Ma
 	// 对于项目类型群组，存储项目名称用于标签匹配
 	manualProjectNames := make(map[string]bool)
 
+	logx.Infof("群组[%s]手动分配记录数: %d, 规则数: %d", group.Name, len(manualContainers), len(rules))
+
 	for _, mc := range manualContainers {
 		manualMapByID[mc.ContainerID] = true
+		logx.Debugf("群组[%s]分配记录: ID=%s, Name=%s", group.Name, mc.ContainerID, mc.ContainerName)
 		// 同时按名称映射，用于容器更新后ID变化的情况
 		if mc.ContainerName != "" {
 			manualMapByName[mc.ContainerName] = true

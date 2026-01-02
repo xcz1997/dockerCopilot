@@ -4,6 +4,7 @@ Port: 12712
 Timeout: 100000000000000
 Log:
   Encoding: plain
+  Stat: false
 Auth:
   AccessSecret: ${secretKey}
   AccessExpire: 7257600
