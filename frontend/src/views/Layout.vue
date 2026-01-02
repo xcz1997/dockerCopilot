@@ -349,7 +349,9 @@ function closeSidebar() {
       <main class="p-4 sm:p-6 lg:p-8">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
-            <component :is="Component" :key="refreshKey" />
+            <keep-alive :max="5">
+              <component :is="Component" :key="refreshKey" />
+            </keep-alive>
           </transition>
         </router-view>
       </main>

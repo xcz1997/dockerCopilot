@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useContainersStore } from '@/stores/containers'
 import { useToastStore } from '@/stores/toast'
@@ -9,6 +9,10 @@ import api from '@/api'
 const router = useRouter()
 const containersStore = useContainersStore()
 const toastStore = useToastStore()
+
+// 记录上次刷新时间，用于智能刷新
+let lastFetchTime = 0
+const REFRESH_INTERVAL = 5000 // 5秒内不重复刷新
 
 // 防抖状态：记录正在提交后台更新的容器ID
 const submittingBackgroundUpdate = ref(new Set())
@@ -407,8 +411,22 @@ async function handleAssignGroup() {
   }
 }
 
+// 智能刷新：避免短时间内重复刷新
+async function smartFetch() {
+  const now = Date.now()
+  if (now - lastFetchTime > REFRESH_INTERVAL) {
+    lastFetchTime = now
+    await containersStore.fetchContainers()
+  }
+}
+
 onMounted(() => {
-  containersStore.fetchContainers()
+  smartFetch()
+})
+
+// 当从其他页面返回时也刷新（配合 keep-alive 使用）
+onActivated(() => {
+  smartFetch()
 })
 </script>
 
