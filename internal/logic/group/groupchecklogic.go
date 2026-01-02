@@ -42,10 +42,10 @@ func (l *GroupCheckLogic) GroupCheck(req *types.GroupIdReq) (resp *types.Resp, e
 		return resp, err
 	}
 
-	// 触发检查（不强制更新），获取任务ID
+	// 触发检查（只检查不更新，忽略群组的autoUpdate设置），获取任务ID
 	var taskId string
 	if l.svcCtx.GroupScheduler != nil {
-		taskId = l.svcCtx.GroupScheduler.TriggerGroup(group.ID, false)
+		taskId = l.svcCtx.GroupScheduler.TriggerGroup(group.ID, false, true)
 	}
 
 	resp.Code = 200

@@ -233,11 +233,16 @@ func (s *GroupScheduler) UpdateJob(group model.ContainerGroup) error {
 }
 
 // TriggerGroup 手动触发群组检查/更新，返回任务ID
-func (s *GroupScheduler) TriggerGroup(groupID int64, forceUpdate bool) string {
+// forceUpdate: true=强制更新，false=按群组配置执行
+// checkOnly: true=只检查不更新（忽略群组的autoUpdate设置）
+func (s *GroupScheduler) TriggerGroup(groupID int64, forceUpdate bool, checkOnly ...bool) string {
 	taskID := s.generateTaskID("group")
+	onlyCheck := len(checkOnly) > 0 && checkOnly[0]
 	go func() {
 		if forceUpdate {
 			s.executeGroupUpdateWithProgress(groupID, taskID)
+		} else if onlyCheck {
+			s.executeGroupCheckOnlyWithProgress(groupID, taskID)
 		} else {
 			s.executeGroupWithProgress(groupID, taskID)
 		}
@@ -796,6 +801,144 @@ func (s *GroupScheduler) getMatchedContainers(groupID int64) ([]MatchedContainer
 func (s *GroupScheduler) getMatchedImages(groupID int64) ([]MatchedImage, error) {
 	matcher := NewMatcher(s.dockerClient)
 	return matcher.GetMatchedImages(context.Background(), groupID)
+}
+
+// executeGroupCheckOnlyWithProgress 执行群组检查任务（只检查不更新）
+func (s *GroupScheduler) executeGroupCheckOnlyWithProgress(groupID int64, taskID string) {
+	taskName := fmt.Sprintf("群组检查: #%d", groupID)
+	groupIDStr := fmt.Sprintf("%d", groupID)
+
+	group, err := model.GetGroupByID(groupID)
+	if err != nil {
+		logx.Errorf("获取群组[%d]失败: %v", groupID, err)
+		s.updateProgressWithMeta(taskID, 0, "获取群组失败", taskName, err.Error(), true, "group_check", groupIDStr, "")
+		return
+	}
+
+	taskName = fmt.Sprintf("群组检查: %s", group.Name)
+
+	if !group.Enabled {
+		s.updateProgressWithMeta(taskID, 100, "群组已禁用", taskName, "跳过执行", true, "group_check", groupIDStr, group.Name)
+		return
+	}
+
+	// 根据群组类型执行检查
+	switch group.GroupType {
+	case model.GroupTypeImage:
+		s.executeImageGroupCheckOnly(group, taskID, taskName, groupIDStr)
+	default:
+		s.executeContainerGroupCheckOnly(group, taskID, taskName, groupIDStr)
+	}
+}
+
+// executeContainerGroupCheckOnly 容器群组只检查不更新
+func (s *GroupScheduler) executeContainerGroupCheckOnly(group *model.ContainerGroup, taskID, taskName, groupIDStr string) {
+	s.updateProgressWithMeta(taskID, 5, "开始检查群组", taskName, "正在获取匹配的容器", false, "group_check", groupIDStr, group.Name)
+
+	containers, err := s.getMatchedContainers(group.ID)
+	if err != nil {
+		logx.Errorf("获取群组[%s]容器失败: %v", group.Name, err)
+		s.updateProgressWithMeta(taskID, 0, "获取容器失败", taskName, err.Error(), true, "group_check", groupIDStr, group.Name)
+		return
+	}
+
+	if len(containers) == 0 {
+		s.updateProgressWithMeta(taskID, 100, "完成", taskName, "没有匹配的容器", true, "group_check", groupIDStr, group.Name)
+		return
+	}
+
+	total := len(containers)
+	hasUpdateCount := 0
+	var taskDetails []module.TaskDetail
+
+	s.updateProgress(taskID, 10, fmt.Sprintf("找到 %d 个容器", total), taskName, "开始检查更新", false)
+
+	for i, ctr := range containers {
+		progress := 10 + (i+1)*80/total
+		s.updateProgress(taskID, progress, fmt.Sprintf("检查 %s (%d/%d)", ctr.Name, i+1, total), taskName, "", false)
+		s.updateSubTask(taskID, ctr.Name, "in_progress", "检查中...")
+
+		hasUpdate := s.checkOnly(group, ctr)
+		if hasUpdate {
+			hasUpdateCount++
+			s.updateSubTask(taskID, ctr.Name, "completed", "有可用更新")
+			taskDetails = append(taskDetails, module.TaskDetail{Name: ctr.Name, Status: "has_update"})
+		} else {
+			s.updateSubTask(taskID, ctr.Name, "completed", "已是最新")
+		}
+	}
+
+	var summary string
+	if hasUpdateCount > 0 {
+		summary = fmt.Sprintf("发现 %d 个可更新 (共 %d 个容器)", hasUpdateCount, total)
+	} else {
+		summary = fmt.Sprintf("全部 %d 个容器已是最新", total)
+	}
+
+	s.updateProgressWithMeta(taskID, 100, "检查完成", taskName, summary, true, "group_check", groupIDStr, group.Name)
+	logx.Infof("群组[%s]检查完成: %s", group.Name, summary)
+
+	// 发送通知
+	module.NotifyGroupTaskCompleteWithDetails(group.Name, "check", hasUpdateCount, total-hasUpdateCount, 0, taskDetails)
+}
+
+// executeImageGroupCheckOnly 镜像群组只检查不更新
+func (s *GroupScheduler) executeImageGroupCheckOnly(group *model.ContainerGroup, taskID, taskName, groupIDStr string) {
+	s.updateProgressWithMeta(taskID, 5, "开始检查群组", taskName, "正在获取匹配的镜像", false, "group_check", groupIDStr, group.Name)
+
+	images, err := s.getMatchedImages(group.ID)
+	if err != nil {
+		logx.Errorf("获取群组[%s]镜像失败: %v", group.Name, err)
+		s.updateProgressWithMeta(taskID, 0, "获取镜像失败", taskName, err.Error(), true, "group_check", groupIDStr, group.Name)
+		return
+	}
+
+	if len(images) == 0 {
+		s.updateProgressWithMeta(taskID, 100, "完成", taskName, "没有匹配的镜像", true, "group_check", groupIDStr, group.Name)
+		return
+	}
+
+	total := len(images)
+	hasUpdateCount := 0
+	var taskDetails []module.TaskDetail
+
+	s.updateProgress(taskID, 10, fmt.Sprintf("找到 %d 个镜像", total), taskName, "开始检查更新", false)
+
+	executor := NewExecutor(s.dockerClient, s.hubImageInfo)
+
+	for i, img := range images {
+		progress := 10 + (i+1)*80/total
+		s.updateProgress(taskID, progress, fmt.Sprintf("检查 %s (%d/%d)", img.FullName, i+1, total), taskName, "", false)
+		s.updateSubTaskWithProgress(taskID, img.FullName, "in_progress", "检查更新", "正在检查是否有可用更新...", 5)
+
+		hasUpdate, err := executor.CheckImageUpdate(context.Background(), img)
+		if err != nil {
+			logx.Errorf("检查镜像[%s]更新失败: %v", img.FullName, err)
+			s.updateSubTaskWithProgress(taskID, img.FullName, "failed", "检查失败", err.Error(), 100)
+			continue
+		}
+
+		if hasUpdate {
+			hasUpdateCount++
+			s.updateSubTaskWithProgress(taskID, img.FullName, "completed", "有可用更新", "发现新版本可用", 100)
+			taskDetails = append(taskDetails, module.TaskDetail{Name: img.FullName, Status: "has_update"})
+		} else {
+			s.updateSubTaskWithProgress(taskID, img.FullName, "completed", "已是最新", "当前版本已是最新", 100)
+		}
+	}
+
+	var summary string
+	if hasUpdateCount > 0 {
+		summary = fmt.Sprintf("发现 %d 个可更新 (共 %d 个镜像)", hasUpdateCount, total)
+	} else {
+		summary = fmt.Sprintf("全部 %d 个镜像已是最新", total)
+	}
+
+	s.updateProgressWithMeta(taskID, 100, "检查完成", taskName, summary, true, "group_check", groupIDStr, group.Name)
+	logx.Infof("群组[%s]镜像检查完成: %s", group.Name, summary)
+
+	// 发送通知
+	module.NotifyGroupTaskCompleteWithDetails(group.Name, "check", hasUpdateCount, total-hasUpdateCount, 0, taskDetails)
 }
 
 // checkOnly 仅检查更新，返回是否有更新
