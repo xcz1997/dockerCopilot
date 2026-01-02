@@ -86,6 +86,20 @@ export const useImagesStore = defineStore('images', () => {
     }
   }
 
+  // 清除所有未使用的镜像
+  async function pruneImages() {
+    try {
+      const response = await api.images.prune()
+      if (response.code === 200) {
+        await fetchImages()
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.msg }
+    } catch (e) {
+      return { success: false, message: e.message }
+    }
+  }
+
   return {
     images,
     loading,
@@ -94,6 +108,7 @@ export const useImagesStore = defineStore('images', () => {
     removeImage,
     pullImage,
     updateSource,
-    updateTag
+    updateTag,
+    pruneImages
   }
 })

@@ -284,7 +284,7 @@ type VersionInfo struct {
 
 // GetVersion 获取远程版本信息
 func (c *RemoteClient) GetVersion() (*VersionInfo, error) {
-	resp, err := c.doRequest("GET", "/api/version", nil)
+	resp, err := c.doRequest("GET", "/api/version?type=local", nil)
 	if err != nil {
 		return nil, err
 	}

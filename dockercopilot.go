@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/robfig/cron/v3"
 	"github.com/xcz1997/dockerCopilot/internal/config"
 	"github.com/xcz1997/dockerCopilot/internal/handler"
 	"github.com/xcz1997/dockerCopilot/internal/middleware"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 	"github.com/xcz1997/dockerCopilot/internal/utiles"
-	"github.com/robfig/cron/v3"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest"
@@ -238,6 +238,8 @@ func SetupLog(logDir string) error {
 		Mode:     "file",
 	}
 	logx.MustSetup(logConf)
-	logx.AddWriter(logx.NewWriter(os.Stdout))
+	// 使用带过滤功能的 Writer，过滤高频 API 请求日志
+	filteredWriter := middleware.NewFilteredWriter(os.Stdout)
+	logx.AddWriter(logx.NewWriter(filteredWriter))
 	return nil
 }

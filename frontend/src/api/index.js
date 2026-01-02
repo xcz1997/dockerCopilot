@@ -66,7 +66,8 @@ const api = {
     remove: (id, force = false) => instance.delete(`/image/${id}`, { params: { force } }),
     pull: (imageNameAndTag) => instance.post('/image/pull', { image_name_and_tag: imageNameAndTag }, { headers: { 'Content-Type': 'application/json' } }),
     updateSource: (id, sourceType, registryHost = '') => instance.put(`/image/${id}/source`, { sourceType, registryHost }, { headers: { 'Content-Type': 'application/json' } }),
-    updateTag: (id, newTag) => instance.put(`/image/${id}/tag`, { newTag }, { headers: { 'Content-Type': 'application/json' } })
+    updateTag: (id, newTag) => instance.put(`/image/${id}/tag`, { newTag }, { headers: { 'Content-Type': 'application/json' } }),
+    prune: () => instance.post('/images/prune')
   },
 
   backups: {

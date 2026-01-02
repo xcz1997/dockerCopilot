@@ -146,6 +146,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/images",
 				Handler: image.ImagesListHandler(serverCtx),
 			},
+		{
+			Method:  http.MethodPost,
+			Path:    "/images/prune",
+			Handler: image.PruneHandler(serverCtx),
+		},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),

@@ -55,6 +55,7 @@ const showDeleteModal = ref(false)
 const showPullModal = ref(false)
 const showSourceModal = ref(false)
 const showTagModal = ref(false)
+const showPruneModal = ref(false)
 const selectedImage = ref(null)
 const forceDelete = ref(false)
 const deletingIds = ref(new Set())
@@ -62,6 +63,7 @@ const pullingIds = ref(new Set())
 const updatingSourceIds = ref(new Set())
 const updatingTagIds = ref(new Set())
 const newTagInput = ref('')
+const pruning = ref(false)
 
 const filteredImages = computed(() => {
   let result = imagesStore.images
@@ -291,6 +293,29 @@ async function handleTagChange() {
   }
 }
 
+// 清除所有未使用的镜像
+async function handlePrune() {
+  pruning.value = true
+  try {
+    const result = await imagesStore.pruneImages()
+    if (result.success) {
+      showPruneModal.value = false
+      const data = result.data || {}
+      const deletedCount = data.deletedCount || 0
+      const spaceStr = data.spaceStr || '0 B'
+      if (deletedCount > 0) {
+        toastStore.success(`已清除 ${deletedCount} 个未使用镜像，释放 ${spaceStr}`)
+      } else {
+        toastStore.info('没有未使用的镜像需要清除')
+      }
+    } else {
+      toastStore.error(result.message || '清除失败')
+    }
+  } finally {
+    pruning.value = false
+  }
+}
+
 onMounted(() => {
   smartFetch()
 })
@@ -412,6 +437,19 @@ onActivated(() => {
           </div>
 
           <div class="flex items-center gap-2">
+            <!-- 清除未使用镜像按钮（仅在筛选未使用时显示） -->
+            <button
+              v-if="filterType === 'unused' && stats.unused > 0"
+              @click="showPruneModal = true"
+              :disabled="pruning"
+              class="btn btn-danger btn-sm sm:btn flex-shrink-0"
+            >
+              <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <span class="hidden sm:inline ml-1">清除所有</span>
+            </button>
+
             <!-- 排序按钮 -->
             <div class="relative">
               <button
@@ -874,6 +912,47 @@ onActivated(() => {
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
             确认修改
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 清除未使用镜像确认弹窗 -->
+    <div v-if="showPruneModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+      <div class="card w-full max-w-md p-6 animate-scale-in" @click.stop>
+        <div class="flex items-center gap-3 mb-4">
+          <div class="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
+            <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">清除未使用镜像</h3>
+        </div>
+
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+          确定要清除所有 <strong class="text-red-600 dark:text-red-400">{{ stats.unused }}</strong> 个未使用的镜像吗？
+        </p>
+
+        <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
+          <div class="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-medium mb-1">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>此操作不可恢复</span>
+          </div>
+          <p class="text-sm text-amber-700 dark:text-amber-400">
+            将删除所有没有被任何容器使用的镜像，释放磁盘空间。
+          </p>
+        </div>
+
+        <div class="flex justify-end gap-3">
+          <button @click="showPruneModal = false" class="btn btn-secondary" :disabled="pruning">取消</button>
+          <button @click="handlePrune" class="btn btn-danger" :disabled="pruning">
+            <svg v-if="pruning" class="w-4 h-4 animate-spin mr-1" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            {{ pruning ? '清除中...' : '确认清除' }}
           </button>
         </div>
       </div>
