@@ -63,7 +63,9 @@ func (l *SystemRestartLogic) SystemRestart() (resp *types.Resp, err error) {
 
 	logx.Infof("准备重启服务，容器 ID: %s", containerID)
 
-	// 异步执行重启，使用独立的 Docker client 避免 context canceled
+	// 异步执行重启
+	// 使用 ContainerStop 而非 ContainerRestart，让 Docker 的 restart policy 自动重启容器
+	// 这样更可靠，因为 ContainerRestart 在容器重启自己时可能会有竞态条件
 	go func() {
 		// 等待响应发送
 		time.Sleep(time.Second)
@@ -82,15 +84,17 @@ func (l *SystemRestartLogic) SystemRestart() (resp *types.Resp, err error) {
 			logx.Errorf("创建 Docker client 失败: %v", err)
 			return
 		}
-		defer cli.Close()
+		// 注意：不使用 defer cli.Close()，因为容器会被停止，这个 goroutine 不会正常结束
 
+		// 使用 Stop 而非 Restart，依赖容器的 restart: always 策略自动重启
 		timeout := 10
-		err = cli.ContainerRestart(context.Background(), containerID, container.StopOptions{
+		err = cli.ContainerStop(context.Background(), containerID, container.StopOptions{
 			Timeout: &timeout,
 		})
 		if err != nil {
-			logx.Errorf("重启容器失败: %v", err)
+			logx.Errorf("停止容器失败: %v", err)
 		}
+		// 容器停止后，Docker daemon 会根据 restart policy 自动重启
 	}()
 
 	resp.Code = 200
