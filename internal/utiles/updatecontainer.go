@@ -214,6 +214,12 @@ func UpdateContainer(serviceContext *svc.ServiceContext, id string, name string,
 					logx.Errorf("删除旧镜像失败: %s", err.Error())
 				}
 			}
+
+			// 标记新镜像为已更新（清除 haveUpdate 状态）
+			if serviceContext.HubImageInfo != nil {
+				serviceContext.HubImageInfo.MarkAsUpdated(newImageInspect.ID, imageNameAndTag)
+				logx.Infof("标记镜像 %s 为已更新", imageNameAndTag)
+			}
 		}
 	}
 

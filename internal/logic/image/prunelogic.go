@@ -3,9 +3,10 @@ package image
 import (
 	"context"
 
-	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 	"github.com/xcz1997/dockerCopilot/internal/svc"
 	"github.com/xcz1997/dockerCopilot/internal/types"
+	"github.com/xcz1997/dockerCopilot/internal/utiles"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -23,40 +24,74 @@ func NewPruneLogic(ctx context.Context, svcCtx *svc.ServiceContext) *PruneLogic 
 	}
 }
 
-// Prune 清除所有未使用的镜像
+// Prune 清除所有未使用的镜像（与前端显示一致）
 func (l *PruneLogic) Prune() (resp *types.Resp, err error) {
 	resp = &types.Resp{}
 
-	// 使用 Docker API 的 ImagesPrune 功能
-	// 这会删除所有没有被任何容器使用的镜像（dangling 和 unused）
-	pruneFilters := filters.NewArgs()
-	// 添加 dangling=false 会包含所有未使用的镜像，不仅仅是 dangling 的
-	pruneFilters.Add("dangling", "false")
-
-	report, err := l.svcCtx.DockerClient.ImagesPrune(l.ctx, pruneFilters)
+	// 获取镜像列表（与前端显示一致的逻辑）
+	imagesList, err := utiles.GetImagesList(l.svcCtx)
 	if err != nil {
-		logx.Errorf("清除未使用镜像失败: %v", err)
+		logx.Errorf("获取镜像列表失败: %v", err)
 		resp.Code = 500
-		resp.Msg = "清除失败: " + err.Error()
+		resp.Msg = "获取镜像列表失败: " + err.Error()
 		resp.Data = map[string]interface{}{}
 		return resp, nil
 	}
 
-	// 统计删除的镜像数量和释放的空间
-	deletedCount := len(report.ImagesDeleted)
-	spaceReclaimed := report.SpaceReclaimed
+	// 筛选出未使用的镜像（与前端 stats.unused 一致的判断逻辑）
+	var unusedImages []types.Image
+	for _, img := range imagesList {
+		// 跳过 dangling 镜像（前端不显示这些）
+		if img.ImageName == "None" || img.ImageTag == "None" {
+			continue
+		}
+		// 只删除未使用的镜像
+		if !img.InUsed {
+			unusedImages = append(unusedImages, img)
+		}
+	}
+
+	if len(unusedImages) == 0 {
+		resp.Code = 200
+		resp.Msg = "success"
+		resp.Data = map[string]interface{}{
+			"deletedCount":   0,
+			"spaceReclaimed": uint64(0),
+			"spaceStr":       "0 B",
+		}
+		return resp, nil
+	}
+
+	// 逐个删除未使用的镜像
+	var deletedCount int
+	var spaceReclaimed uint64
+	var failedImages []string
+
+	for _, img := range unusedImages {
+		// 删除镜像
+		deleteResp, err := l.svcCtx.DockerClient.ImageRemove(l.ctx, img.ID, image.RemoveOptions{
+			Force:         false,
+			PruneChildren: true, // 同时删除未被其他镜像引用的父层
+		})
+		if err != nil {
+			logx.Errorf("删除镜像 %s:%s 失败: %v", img.ImageName, img.ImageTag, err)
+			failedImages = append(failedImages, img.ImageName+":"+img.ImageTag)
+			continue
+		}
+
+		deletedCount++
+		// 统计释放的空间
+		for _, item := range deleteResp {
+			if item.Deleted != "" {
+				spaceReclaimed += uint64(img.Size)
+				break // 只计算一次主镜像大小
+			}
+		}
+		logx.Infof("已删除镜像: %s:%s", img.ImageName, img.ImageTag)
+	}
 
 	// 格式化释放的空间大小
-	var spaceStr string
-	if spaceReclaimed >= 1024*1024*1024 {
-		spaceStr = formatSize(spaceReclaimed)
-	} else if spaceReclaimed >= 1024*1024 {
-		spaceStr = formatSize(spaceReclaimed)
-	} else if spaceReclaimed >= 1024 {
-		spaceStr = formatSize(spaceReclaimed)
-	} else {
-		spaceStr = formatSize(spaceReclaimed)
-	}
+	spaceStr := formatSize(spaceReclaimed)
 
 	logx.Infof("清除未使用镜像完成: 删除 %d 个镜像，释放 %s", deletedCount, spaceStr)
 
@@ -66,6 +101,7 @@ func (l *PruneLogic) Prune() (resp *types.Resp, err error) {
 		"deletedCount":   deletedCount,
 		"spaceReclaimed": spaceReclaimed,
 		"spaceStr":       spaceStr,
+		"failedImages":   failedImages,
 	}
 	return resp, nil
 }
@@ -86,15 +122,11 @@ func formatSize(bytes uint64) string {
 	case bytes >= KB:
 		return formatFloat(float64(bytes)/float64(KB)) + " KB"
 	default:
-		return formatFloat(float64(bytes)) + " B"
+		return intToString(int64(bytes)) + " B"
 	}
 }
 
 func formatFloat(f float64) string {
-	if f == float64(int64(f)) {
-		return string(rune(int(f))) + ""
-	}
-	// 使用简单的格式化，保留1位小数
 	intPart := int64(f)
 	decPart := int64((f - float64(intPart)) * 10)
 	if decPart == 0 {
