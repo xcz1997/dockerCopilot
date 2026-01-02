@@ -477,7 +477,7 @@ func (e *Executor) CheckUpdate(ctx context.Context, container MatchedContainer) 
 	if e.hubImageInfo != nil {
 		// 先尝试通过 ImageID 查找
 		if info, ok := e.hubImageInfo.GetImageCheck(container.ImageID); ok {
-			logx.Infof("容器[%s]使用缓存的更新状态(ImageID): needUpdate=%v (镜像ID: %s)",
+			logx.Debugf("容器[%s]使用缓存的更新状态(ImageID): needUpdate=%v (镜像ID: %s)",
 				container.Name, info.NeedUpdate, container.ImageID[:12])
 			return info.NeedUpdate, nil
 		}
@@ -487,14 +487,14 @@ func (e *Executor) CheckUpdate(ctx context.Context, container MatchedContainer) 
 			imageName += ":latest"
 		}
 		if info, ok := e.hubImageInfo.GetImageCheckByName(imageName); ok {
-			logx.Infof("容器[%s]使用缓存的更新状态(ImageName): needUpdate=%v (镜像名: %s)",
+			logx.Debugf("容器[%s]使用缓存的更新状态(ImageName): needUpdate=%v (镜像名: %s)",
 				container.Name, info.NeedUpdate, imageName)
 			return info.NeedUpdate, nil
 		}
 	}
 
 	// 如果缓存中没有，则实际拉取检查
-	logx.Infof("容器[%s]缓存中无更新状态，开始拉取检查", container.Name)
+	logx.Debugf("容器[%s]缓存中无更新状态，开始拉取检查", container.Name)
 
 	// 获取本地镜像信息
 	localInspect, _, err := e.dockerClient.ImageInspectWithRaw(ctx, container.ImageID)
@@ -504,7 +504,7 @@ func (e *Executor) CheckUpdate(ctx context.Context, container MatchedContainer) 
 
 	// 获取正确的镜像名称（带标签）
 	imageName := e.getImageNameWithTag(ctx, container.ImageID, container.Image)
-	logx.Infof("容器[%s]检查更新使用镜像名称: %s", container.Name, imageName)
+	logx.Debugf("容器[%s]检查更新使用镜像名称: %s", container.Name, imageName)
 
 	// 使用统一的镜像拉取方法（支持加速器和私有 Registry 认证）
 	pullOpts := module.PullImageOptions{
@@ -541,7 +541,7 @@ func (e *Executor) CheckUpdate(ctx context.Context, container MatchedContainer) 
 	// 比较 digest
 	hasUpdate := localInspect.ID != remoteInspect.ID
 
-	logx.Infof("容器[%s]镜像检查: 本地=%s, 远程=%s, 有更新=%v",
+	logx.Debugf("容器[%s]镜像检查: 本地=%s, 远程=%s, 有更新=%v",
 		container.Name, localInspect.ID[:12], remoteInspect.ID[:12], hasUpdate)
 
 	return hasUpdate, nil
@@ -606,7 +606,7 @@ func (e *Executor) UpdateWithProgress(ctx context.Context, mc MatchedContainer, 
 	// 4. 获取正确的镜像名称（带标签）
 	// 优先从镜像的 RepoTags 获取，避免使用摘要格式导致标签丢失
 	imageName := e.getImageNameWithTag(ctx, mc.ImageID, mc.Image)
-	logx.Infof("容器[%s]使用镜像名称: %s (原始: %s)", mc.Name, imageName, mc.Image)
+	logx.Debugf("容器[%s]使用镜像名称: %s (原始: %s)", mc.Name, imageName, mc.Image)
 	reportProgress(30, "拉取新镜像", fmt.Sprintf("正在拉取镜像 %s", imageName))
 	logx.Infof("拉取新镜像[%s]", imageName)
 
@@ -734,17 +734,17 @@ func (e *Executor) CheckImageUpdate(ctx context.Context, img MatchedImage) (bool
 	// 优先使用 hubImageInfo 中已检测的结果
 	if e.hubImageInfo != nil {
 		if info, ok := e.hubImageInfo.GetImageCheck(img.ID); ok {
-			logx.Infof("镜像[%s]使用缓存的更新状态: needUpdate=%v", img.FullName, info.NeedUpdate)
+			logx.Debugf("镜像[%s]使用缓存的更新状态: needUpdate=%v", img.FullName, info.NeedUpdate)
 			return info.NeedUpdate, nil
 		}
 		if info, ok := e.hubImageInfo.GetImageCheckByName(img.FullName); ok {
-			logx.Infof("镜像[%s]使用缓存的更新状态(按名称): needUpdate=%v", img.FullName, info.NeedUpdate)
+			logx.Debugf("镜像[%s]使用缓存的更新状态(按名称): needUpdate=%v", img.FullName, info.NeedUpdate)
 			return info.NeedUpdate, nil
 		}
 	}
 
 	// 缓存中没有，则实际拉取检查
-	logx.Infof("镜像[%s]缓存中无更新状态，开始拉取检查", img.FullName)
+	logx.Debugf("镜像[%s]缓存中无更新状态，开始拉取检查", img.FullName)
 
 	// 获取本地镜像信息
 	localInspect, _, err := e.dockerClient.ImageInspectWithRaw(ctx, img.ID)
@@ -780,7 +780,7 @@ func (e *Executor) CheckImageUpdate(ctx context.Context, img MatchedImage) (bool
 	}
 
 	hasUpdate := localInspect.ID != remoteInspect.ID
-	logx.Infof("镜像[%s]检查: 本地=%s, 远程=%s, 有更新=%v",
+	logx.Debugf("镜像[%s]检查: 本地=%s, 远程=%s, 有更新=%v",
 		img.FullName, localInspect.ID[:12], remoteInspect.ID[:12], hasUpdate)
 
 	return hasUpdate, nil

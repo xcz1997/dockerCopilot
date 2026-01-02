@@ -32,7 +32,7 @@ var DefaultAcceleratorHostList = []string{"docker.1ms.run", "docker.m.daocloud.i
 	"docker.anye.in", "hub.rat.dev", "docker.amingg.com"}
 
 func GetToken(image types.Image, registryAuth string) (string, error) {
-	logx.Infof("image name %s", image.ImageName)
+	logx.Debugf("image name %s", image.ImageName)
 	normalizedRef, err := ref.ParseNormalizedNamed(image.ImageName)
 	if err != nil {
 		return "", err

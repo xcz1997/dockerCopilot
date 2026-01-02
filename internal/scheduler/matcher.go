@@ -152,7 +152,7 @@ func (m *Matcher) GetMatchedContainers(ctx context.Context, groupID int64) ([]Ma
 		}
 		name := strings.TrimPrefix(c.Names[0], "/")
 		if manualMapByName[name] {
-			logx.Infof("容器[%s]通过名称匹配（ID可能已变化）", name)
+			logx.Debugf("容器[%s]通过名称匹配（ID可能已变化）", name)
 			matched = append(matched, MatchedContainer{
 				ID:        c.ID,
 				Name:      name,
@@ -176,7 +176,7 @@ func (m *Matcher) GetMatchedContainers(ctx context.Context, groupID int64) ([]Ma
 			projectName := c.Labels["com.docker.compose.project"]
 			if projectName != "" && manualProjectNames[projectName] {
 				name := strings.TrimPrefix(c.Names[0], "/")
-				logx.Infof("容器[%s]通过项目标签匹配（项目: %s）", name, projectName)
+				logx.Debugf("容器[%s]通过项目标签匹配（项目: %s）", name, projectName)
 				matched = append(matched, MatchedContainer{
 					ID:        c.ID,
 					Name:      name,
@@ -485,7 +485,7 @@ func (m *Matcher) GetMatchedImages(ctx context.Context, groupID int64) ([]Matche
 		// 检查是否手动分配（按名称匹配）
 		if manualMapByName[fullName] || manualMapByName[imageName] {
 			if !matchedIDs[img.ID] {
-				logx.Infof("镜像[%s]通过名称匹配", fullName)
+				logx.Debugf("镜像[%s]通过名称匹配", fullName)
 				matched = append(matched, MatchedImage{
 					ID:        img.ID,
 					Name:      imageName,

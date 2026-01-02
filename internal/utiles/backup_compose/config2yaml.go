@@ -57,7 +57,7 @@ func formatBaseServiceConfig(containerJSON dockerTypes.ContainerJSON, s *compose
 	s.Image = containerJSON.Config.Image
 	name, cutNameResult := strings.CutPrefix(containerJSON.Name, "/")
 	if !cutNameResult {
-		logx.Infof("cutting name is: %s", containerJSON.Name)
+		logx.Debugf("cutting name is: %s", containerJSON.Name)
 	}
 	s.ContainerName = name
 	s.Name = name
