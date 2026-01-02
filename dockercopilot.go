@@ -204,7 +204,7 @@ func RegisterHandlers(engine *rest.Server) {
 	}
 
 	// 注册 SPA 路由
-	spaRoutes := []string{"/manager", "/manager/containers", "/manager/images", "/manager/groups", "/manager/backups", "/manager/settings", "/manager/login", "/manager/tasks", "/manager/projects"}
+	spaRoutes := []string{"/manager", "/manager/containers", "/manager/images", "/manager/groups", "/manager/backups", "/manager/settings", "/manager/login", "/manager/tasks", "/manager/projects", "/manager/environments"}
 	for _, path := range spaRoutes {
 		engine.AddRoute(rest.Route{Method: http.MethodGet, Path: path, Handler: spaHandler})
 	}

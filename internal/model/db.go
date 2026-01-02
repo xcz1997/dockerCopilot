@@ -261,6 +261,7 @@ func migrate(db *sql.DB) error {
 	_, _ = db.Exec(`ALTER TABLE environments ADD COLUMN cpu_cores INTEGER DEFAULT 0`)
 	_, _ = db.Exec(`ALTER TABLE environments ADD COLUMN memory_total INTEGER DEFAULT 0`)
 	_, _ = db.Exec(`ALTER TABLE environments ADD COLUMN icon TEXT DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE environments ADD COLUMN version TEXT DEFAULT ''`)
 	if err != nil {
 		return err
 	}

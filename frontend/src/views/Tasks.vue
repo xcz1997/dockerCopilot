@@ -444,7 +444,7 @@ onUnmounted(() => {
                       :style="{ width: `${getSubTaskProgress(subTask)}%` }"
                     ></div>
                   </div>
-                  <p v-if="subTask.detailMsg" class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
+                  <p v-if="subTask.detailMsg" class="text-xs text-gray-500 dark:text-gray-400 mt-1 break-words" :title="subTask.detailMsg">
                     {{ subTask.detailMsg }}
                   </p>
                 </div>

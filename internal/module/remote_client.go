@@ -236,6 +236,12 @@ func (c *RemoteClient) GetStats() (*model.EnvironmentStats, error) {
 		stats.MemoryTotal = sysInfo.MemoryTotal
 	}
 
+	// 获取版本号
+	versionInfo, err := c.GetVersion()
+	if err == nil && versionInfo != nil {
+		stats.Version = versionInfo.Version
+	}
+
 	return stats, nil
 }
 
@@ -244,6 +250,30 @@ type SystemInfo struct {
 	VolumeCount int   `json:"volumeCount"`
 	CPUCores    int   `json:"cpuCores"`
 	MemoryTotal int64 `json:"memoryTotal"`
+}
+
+// VersionInfo 版本信息结构
+type VersionInfo struct {
+	Version string `json:"version"`
+}
+
+// GetVersion 获取远程版本信息
+func (c *RemoteClient) GetVersion() (*VersionInfo, error) {
+	resp, err := c.doRequest("GET", "/api/version", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != 200 {
+		return nil, fmt.Errorf("获取版本信息失败: %s", resp.Msg)
+	}
+
+	var info VersionInfo
+	if err := json.Unmarshal(resp.Data, &info); err != nil {
+		return nil, fmt.Errorf("解析版本信息失败: %w", err)
+	}
+
+	return &info, nil
 }
 
 // GetSystemInfo 获取远程系统信息

@@ -106,6 +106,7 @@
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white truncate">{{ env.name }}</h3>
+                <span v-if="env.version" class="badge badge-secondary text-xs font-mono">{{ env.version }}</span>
                 <span v-if="env.isDefault" class="badge badge-info text-xs">默认</span>
                 <span :class="getStatusClass(env.status)" class="badge text-xs">{{ getStatusText(env.status) }}</span>
               </div>

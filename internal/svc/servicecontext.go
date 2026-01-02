@@ -247,6 +247,7 @@ func (ctx *ServiceContext) GetLocalStats() (*model.EnvironmentStats, error) {
 		VolumeCount:    volumeCount,
 		CPUCores:       cpuCores,
 		MemoryTotal:    memoryTotal,
+		Version:        config.Version,
 	}
 
 	// 计算运行中和停止的容器
