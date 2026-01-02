@@ -110,6 +110,7 @@ func (i *ImageUpdateData) RemoveImage(imageID string) {
 	defer i.mu.Unlock()
 	delete(i.Data, imageID)
 }
+
 // IsSelfImage 判断是否为 DockerCopilot 自身镜像
 func IsSelfImage(imageName string) bool {
 	lowerName := strings.ToLower(imageName)
@@ -216,25 +217,33 @@ func (i *ImageUpdateData) checkSingleImage(image types.Image) {
 		logx.Errorf("未在本地获取到repoDigest: %s:%s", image.ImageName, image.ImageTag)
 		return
 	}
-	needUpdate := false
+
+	// 检查是否有任意一个本地 digest 与远程匹配
+	// 对于 multi-arch 镜像，本地可能存储的是特定架构的 digest
+	// 只要有一个匹配就表示不需要更新
+	needUpdate := true
+	var localDigestForLog string
 	for _, localRepoDigests := range image.RepoDigests {
 		parts := strings.Split(localRepoDigests, "@")
 		if len(parts) < 2 {
-			logx.Errorf("无效的本地 digest 格式: %s", localRepoDigests)
+			logx.Debugf("无效的本地 digest 格式: %s", localRepoDigests)
 			continue
 		}
 		localDigest := parts[1]
-		if remoteDigest != localDigest {
-			if remoteDigest == "" || localDigest == "" {
-				logx.Errorf("Digest为空 [%s:%s]", image.ImageName, image.ImageTag)
-				continue
-			}
-			logx.Infof("%s:%s 需要更新 (本地: %s, 远程: %s)", image.ImageName, image.ImageTag, localDigest[:12], remoteDigest[:12])
-			needUpdate = true
-		} else {
+		if localDigest == "" {
+			continue
+		}
+		localDigestForLog = localDigest
+		if remoteDigest == localDigest {
+			// 找到匹配，不需要更新
 			logx.Debugf("%s:%s 已是最新版本", image.ImageName, image.ImageTag)
 			needUpdate = false
+			break
 		}
+	}
+
+	if needUpdate && localDigestForLog != "" && remoteDigest != "" {
+		logx.Infof("%s:%s 需要更新 (本地: %s, 远程: %s)", image.ImageName, image.ImageTag, localDigestForLog[:12], remoteDigest[:12])
 	}
 	// 使用线程安全的方法设置结果
 	i.setImageCheck(image.ID, ImageCheckList{NeedUpdate: needUpdate})
@@ -322,10 +331,15 @@ func GetDigest(url string, token string) (string, error) {
 	if token != "" {
 		req.Header.Add("Authorization", token)
 	}
-	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+	// Accept header 顺序
+	// 1. 优先请求 manifest list / OCI index（multi-arch 镜像）
+	// 2. 再请求单架构 manifest
+	// 这样返回的 digest 与本地 RepoDigests 中的 manifest list digest 一致
 	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
-	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v1+json")
 	req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
+	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+	req.Header.Add("Accept", "application/vnd.oci.image.manifest.v1+json")
+	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v1+json")
 
 	res, err := client.Do(req)
 	if err != nil {
